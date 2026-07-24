@@ -8,6 +8,7 @@ import '../models/society_bill.dart';
 import '../models/society_complaint.dart';
 import '../models/society_notice.dart';
 import '../models/society_flat.dart';
+import '../models/society_join_request.dart';
 import '../models/society_resident.dart';
 import '../models/society_search_result.dart';
 import 'api_config.dart';
@@ -77,8 +78,24 @@ class SocietyApi {
     return societies.map((j) => SocietySearchResult.fromJson(j as Map<String, dynamic>)).toList();
   }
 
-  static Future<void> joinSocietyBySearch({required String societyId, required String flatId}) async {
-    _decode(await _post('/society/join-by-search', {'societyId': societyId, 'flatId': flatId}));
+  static Future<void> createJoinRequest({required String societyId}) async {
+    _decode(await _post('/society/join-requests', {'societyId': societyId}));
+  }
+
+  static Future<List<SocietyJoinRequest>> fetchJoinRequests() async {
+    final response = await _get('/society/join-requests');
+    final requests = _decode(response)['joinRequests'] as List;
+    return requests.map((j) => SocietyJoinRequest.fromJson(j as Map<String, dynamic>)).toList();
+  }
+
+  static Future<SocietyJoinRequest?> fetchMyJoinRequest() async {
+    final response = await _get('/society/join-requests/mine');
+    final joinRequest = _decode(response)['joinRequest'];
+    return joinRequest == null ? null : SocietyJoinRequest.fromJson(joinRequest as Map<String, dynamic>);
+  }
+
+  static Future<void> respondToJoinRequest(String id, {required bool approve}) async {
+    _decode(await _patch('/society/join-requests/$id', {'status': approve ? 'approved' : 'rejected'}));
   }
 
   static Future<void> leaveSociety() async {
@@ -111,6 +128,10 @@ class SocietyApi {
   static Future<SocietyFlat> addFlat(String flatNumber) async {
     final response = await _post('/society/flats', {'flatNumber': flatNumber});
     return SocietyFlat.fromJson(_decode(response)['flat'] as Map<String, dynamic>);
+  }
+
+  static Future<void> expressInterest(String flatId) async {
+    _decode(await _post('/society/flats/$flatId/interest', {}));
   }
 
   static Future<({int created, int skipped})> addFlatsBulk(List<String> flatNumbers) async {

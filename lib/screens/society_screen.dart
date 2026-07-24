@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../models/society.dart';
 import '../models/society_flat.dart';
+import '../models/society_join_request.dart';
 import '../models/society_search_result.dart';
 import '../services/auth_service.dart';
 import '../services/society_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
-import '../widgets/pill_badge.dart';
+import '../widgets/flat_picker_sheet.dart';
 import '../widgets/section_hero.dart';
 import 'society_dashboard_screen.dart';
 
@@ -26,6 +27,7 @@ class _SocietyScreenState extends State<SocietyScreen> {
   UserRole? _role;
   Society? _society;
   List<Society> _societies = [];
+  SocietyJoinRequest? _myRequest;
 
   @override
   void initState() {
@@ -50,10 +52,12 @@ class _SocietyScreenState extends State<SocietyScreen> {
         });
       } else {
         final society = await SocietyApi.fetchMySociety();
+        final myRequest = society == null ? await SocietyApi.fetchMyJoinRequest() : null;
         if (!mounted) return;
         setState(() {
           _role = user.role;
           _society = society;
+          _myRequest = myRequest;
           _loading = false;
         });
       }
@@ -205,7 +209,37 @@ class _SocietyScreenState extends State<SocietyScreen> {
     }
 
     if (_society == null) {
-      return _JoinSocietyCard(onJoined: _load);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_myRequest?.status == JoinRequestStatus.pending) ...[
+            DarkCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Request pending', style: AppFonts.heading(fontSize: 16, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Waiting for ${_myRequest!.societyName ?? 'the society'} to approve your request to join.',
+                    style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ] else if (_myRequest?.status == JoinRequestStatus.rejected) ...[
+            DarkCard(
+              borderColor: AppColors.danger,
+              child: Text(
+                'Your request to join ${_myRequest!.societyName ?? 'that society'} was declined.',
+                style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.4),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          _JoinSocietyCard(onJoined: _load),
+        ],
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,7 +393,11 @@ class _JoinSocietyCardState extends State<_JoinSocietyCard> {
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (_) => _FlatPickerSheet(societyName: result.societyName, flats: result.flats),
+        builder: (_) => FlatPickerSheet(
+          title: 'Join ${result.societyName}',
+          flats: result.flats,
+          emptyMessage: 'No flats have been added yet. Ask your association to add flats before joining.',
+        ),
       );
       if (picked == null || !mounted) return;
       await SocietyApi.joinSociety(code: code, flatId: picked.id);
@@ -486,23 +524,11 @@ class _SearchCommunitySheetState extends State<_SearchCommunitySheet> {
 
   Future<void> _join(SocietySearchResult society) async {
     try {
-      final flats = await SocietyApi.fetchPublicFlats(societyId: society.id);
+      await SocietyApi.createJoinRequest(societyId: society.id);
       if (!mounted) return;
-      if (flats.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This society has not added any flats yet. Ask your association to add flats first.')),
-        );
-        return;
-      }
-      final picked = await showModalBottomSheet<SocietyFlat>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => _FlatPickerSheet(societyName: society.name, flats: flats),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Request sent — waiting for the association to approve.')),
       );
-      if (picked == null || !mounted) return;
-      await SocietyApi.joinSocietyBySearch(societyId: society.id, flatId: picked.id);
-      if (!mounted) return;
       Navigator.of(context).pop(true);
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -606,74 +632,6 @@ class _SearchCommunitySheetState extends State<_SearchCommunitySheet> {
   }
 }
 
-/// Lets a prospective resident pick a vacant flat from a society's real
-/// inventory instead of typing a free-text flat number.
-class _FlatPickerSheet extends StatelessWidget {
-  final String societyName;
-  final List<SocietyFlat> flats;
-
-  const _FlatPickerSheet({required this.societyName, required this.flats});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
-        decoration: const BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Join $societyName', style: AppFonts.heading(fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 6),
-              const Text(
-                'Pick your flat. Occupied flats are shown but can\'t be selected.',
-                style: TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.4),
-              ),
-              const SizedBox(height: 16),
-              if (flats.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Text(
-                    'No flats have been added yet. Ask your association to add flats before joining.',
-                    style: TextStyle(fontSize: 12.5, color: AppColors.muted),
-                  ),
-                )
-              else
-                ...flats.map((f) {
-                  final vacant = f.status == FlatStatus.vacant;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: DarkCard(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      onTap: vacant ? () => Navigator.of(context).pop(f) : null,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Flat ${f.flatNumber}',
-                              style: AppFonts.heading(fontSize: 14.5, fontWeight: FontWeight.w700, color: vacant ? AppColors.text : AppColors.muted),
-                            ),
-                          ),
-                          PillBadge(label: f.status.label, color: vacant ? AppColors.success : AppColors.muted),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _AddSocietySheet extends StatefulWidget {
   const _AddSocietySheet();

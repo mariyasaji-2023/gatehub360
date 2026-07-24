@@ -8,6 +8,9 @@ const flatSchema = new mongoose.Schema(
     flatNumber: { type: String, required: true, trim: true },
     status: { type: String, enum: STATUSES, default: 'vacant' },
     resident: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // Residents who've flagged interest in a vacant flat - a lightweight
+    // inquiry note for the association, not a formal request/approval flow.
+    interestedBy: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], default: [] },
   },
   { timestamps: true }
 );

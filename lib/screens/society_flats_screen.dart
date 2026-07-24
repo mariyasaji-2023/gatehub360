@@ -211,6 +211,28 @@ class _SocietyFlatsScreenState extends State<SocietyFlatsScreen> {
     }
   }
 
+  Future<void> _expressInterest(SocietyFlat flat) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Interested in Flat ${flat.flatNumber}?'),
+        content: const Text("This lets your association know you'd like to move into this flat. It's just a note, not a formal request."),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text("I'm Interested")),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await SocietyApi.expressInterest(flat.id);
+      await _load();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -257,32 +279,53 @@ class _SocietyFlatsScreenState extends State<SocietyFlatsScreen> {
                               ),
                             ),
                           ),
-                        ..._flats.map((f) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: DarkCard(
-                                onTap: _isAssociation ? () => _openActions(f) : null,
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text('Flat ${f.flatNumber}', style: AppFonts.heading(fontSize: 15, fontWeight: FontWeight.w700)),
-                                          if (f.status == FlatStatus.occupied && f.residentName != null) ...[
-                                            const SizedBox(height: 4),
-                                            Text(f.residentName!, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
-                                          ],
+                        ..._flats.map((f) {
+                          final canExpressInterest = !_isAssociation && f.status == FlatStatus.vacant && !f.amInterested;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: DarkCard(
+                              onTap: _isAssociation
+                                  ? () => _openActions(f)
+                                  : canExpressInterest
+                                      ? () => _expressInterest(f)
+                                      : null,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Flat ${f.flatNumber}', style: AppFonts.heading(fontSize: 15, fontWeight: FontWeight.w700)),
+                                        if (f.status == FlatStatus.occupied && f.residentName != null) ...[
+                                          const SizedBox(height: 4),
+                                          Text(f.residentName!, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
                                         ],
-                                      ),
+                                        if (_isAssociation && f.interestedNames.isNotEmpty) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Interested: ${f.interestedNames.join(', ')}',
+                                            style: const TextStyle(fontSize: 12.5, color: AppColors.brandLight),
+                                          ),
+                                        ],
+                                        if (canExpressInterest) ...[
+                                          const SizedBox(height: 4),
+                                          const Text('Tap to let the association know you\'re interested', style: TextStyle(fontSize: 11.5, color: AppColors.muted)),
+                                        ],
+                                      ],
                                     ),
+                                  ),
+                                  if (!_isAssociation && f.amInterested)
+                                    const PillBadge(label: 'Interested', color: AppColors.brandLight)
+                                  else
                                     PillBadge(
                                       label: f.status.label,
                                       color: f.status == FlatStatus.vacant ? AppColors.success : AppColors.muted,
                                     ),
-                                  ],
-                                ),
+                                ],
                               ),
-                            )),
+                            ),
+                          );
+                        }),
                       ],
                     ),
         ),

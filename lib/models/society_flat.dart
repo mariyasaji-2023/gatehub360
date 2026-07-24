@@ -13,12 +13,16 @@ class SocietyFlat {
   final String flatNumber;
   final FlatStatus status;
   final String? residentName;
+  final List<String> interestedNames;
+  final bool amInterested;
 
   const SocietyFlat({
     required this.id,
     required this.flatNumber,
     required this.status,
     this.residentName,
+    this.interestedNames = const [],
+    this.amInterested = false,
   });
 
   factory SocietyFlat.fromJson(Map<String, dynamic> json) => SocietyFlat(
@@ -26,5 +30,7 @@ class SocietyFlat {
         flatNumber: json['flatNumber'] as String,
         status: FlatStatus.fromWire(json['status'] as String),
         residentName: (json['resident'] as Map<String, dynamic>?)?['name'] as String?,
+        interestedNames: (json['interestedNames'] as List?)?.cast<String>() ?? const [],
+        amInterested: json['amInterested'] as bool? ?? false,
       );
 }

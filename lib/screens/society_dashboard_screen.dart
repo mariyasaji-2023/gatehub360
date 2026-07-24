@@ -8,6 +8,7 @@ import 'society_billing_screen.dart';
 import 'society_complaints_screen.dart';
 import 'society_directory_screen.dart';
 import 'society_flats_screen.dart';
+import 'society_join_requests_screen.dart';
 import 'society_notices_screen.dart';
 
 /// Pushed route used when an Apartment Association enters a society from the
@@ -103,6 +104,14 @@ class SocietyDashboardBody extends StatelessWidget {
               subtitle: isAssociation ? 'Manage units' : 'View availability',
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocietyFlatsScreen())),
             ),
+            if (isAssociation)
+              _FeatureTile(
+                icon: Icons.person_add_alt_outlined,
+                color: AppColors.brand,
+                title: 'Join Requests',
+                subtitle: 'Approve tenants',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocietyJoinRequestsScreen())),
+              ),
             _FeatureTile(
               icon: Icons.campaign_outlined,
               color: AppColors.amber,

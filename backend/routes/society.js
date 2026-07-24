@@ -5,6 +5,7 @@ const Notice = require('../models/Notice');
 const Complaint = require('../models/Complaint');
 const Bill = require('../models/Bill');
 const Flat = require('../models/Flat');
+const JoinRequest = require('../models/JoinRequest');
 const User = require('../models/User');
 
 const router = express.Router();
@@ -158,6 +159,8 @@ router.post('/join', requireAuth, async (req, res) => {
     await Flat.findByIdAndUpdate(flat._id, { $set: { status: 'vacant' }, $unset: { resident: '' } });
     throw err;
   }
+  // A search-based request made before this instant code-join is now stale.
+  await JoinRequest.deleteMany({ requester: req.user._id, status: 'pending' });
   res.json({ society });
 });
 
@@ -176,7 +179,15 @@ router.get('/search', requireAuth, async (req, res) => {
   res.json({ societies });
 });
 
-router.post('/join-by-search', requireAuth, async (req, res) => {
+// Join Requests
+//
+// Search-based joins go through an approval step (unlike code-based /join,
+// which is instant since having the code already implies the association
+// shared it directly). The flat stays vacant while a request is pending, so
+// several people can request a popular flat and the association picks one -
+// the actual claim only happens atomically at approval time.
+
+router.post('/join-requests', requireAuth, async (req, res) => {
   if (isAssociation(req) || req.user.role === 'service_provider') {
     return res.status(403).json({ message: 'This role cannot join a society' });
   }
@@ -184,31 +195,69 @@ router.post('/join-by-search', requireAuth, async (req, res) => {
     return res.status(400).json({ message: 'You already belong to a society' });
   }
 
-  const { societyId, flatId } = req.body;
-  if (!societyId || !flatId) {
-    return res.status(400).json({ message: 'Society and flat are required' });
+  const { societyId } = req.body;
+  if (!societyId) {
+    return res.status(400).json({ message: 'Society is required' });
   }
   const society = await Society.findById(societyId);
   if (!society) {
     return res.status(404).json({ message: 'Society not found' });
   }
 
-  const flat = await Flat.findOneAndUpdate(
-    { _id: flatId, society: society._id, status: 'vacant' },
-    { $set: { status: 'occupied', resident: req.user._id } },
-    { new: true }
-  );
-  if (!flat) {
-    return res.status(409).json({ message: 'That flat is no longer available. Please pick another.' });
+  const existingPending = await JoinRequest.findOne({ requester: req.user._id, status: 'pending' });
+  if (existingPending) {
+    return res.status(400).json({ message: 'You already have a pending request' });
   }
 
-  try {
-    await User.findByIdAndUpdate(req.user._id, { $set: { society: society._id, flatNumber: flat.flatNumber } });
-  } catch (err) {
-    await Flat.findByIdAndUpdate(flat._id, { $set: { status: 'vacant' }, $unset: { resident: '' } });
-    throw err;
+  const joinRequest = await JoinRequest.create({ society: society._id, requester: req.user._id });
+  res.status(201).json({ joinRequest });
+});
+
+router.get('/join-requests', requireAuth, requireSociety, async (req, res) => {
+  if (!isAssociation(req)) {
+    return res.status(403).json({ message: 'Only the apartment association can view join requests' });
   }
-  res.json({ society });
+  const joinRequests = await JoinRequest.find({ society: req.user.society, status: 'pending' })
+    .populate('requester', 'name phoneNumber')
+    .populate('flat', 'flatNumber')
+    .sort({ createdAt: 1 });
+  res.json({ joinRequests });
+});
+
+// The current user's most recent join request (any status), so the join
+// screen can show "pending"/"declined" instead of the join form again.
+router.get('/join-requests/mine', requireAuth, async (req, res) => {
+  const joinRequest = await JoinRequest.findOne({ requester: req.user._id })
+    .sort({ createdAt: -1 })
+    .populate('flat', 'flatNumber')
+    .populate('society', 'name');
+  res.json({ joinRequest });
+});
+
+router.patch('/join-requests/:id', requireAuth, requireSociety, async (req, res) => {
+  if (!isAssociation(req)) {
+    return res.status(403).json({ message: 'Only the apartment association can respond to join requests' });
+  }
+  const joinRequest = await JoinRequest.findOne({ _id: req.params.id, society: req.user.society });
+  if (!joinRequest || joinRequest.status !== 'pending') {
+    return res.status(404).json({ message: 'Join request not found' });
+  }
+
+  const { status } = req.body;
+  if (!['approved', 'rejected'].includes(status)) {
+    return res.status(400).json({ message: 'Invalid status' });
+  }
+
+  if (status === 'rejected') {
+    joinRequest.status = 'rejected';
+    await joinRequest.save();
+    return res.json({ joinRequest });
+  }
+
+  await User.findByIdAndUpdate(joinRequest.requester, { $set: { society: req.user.society } });
+  joinRequest.status = 'approved';
+  await joinRequest.save();
+  res.json({ joinRequest });
 });
 
 router.post('/leave', requireAuth, requireSociety, async (req, res) => {
@@ -219,6 +268,10 @@ router.post('/leave', requireAuth, requireSociety, async (req, res) => {
     { society: req.user.society, resident: req.user._id },
     { $set: { status: 'vacant' }, $unset: { resident: '' } }
   );
+  // Any other request they'd made elsewhere before joining this society is
+  // now stale - clear it so the join screen doesn't resurface it as still
+  // "pending" once they're back to browsing/joining.
+  await JoinRequest.deleteMany({ requester: req.user._id, status: 'pending' });
   await User.findByIdAndUpdate(req.user._id, { $unset: { society: '', flatNumber: '' } });
   res.json({ success: true });
 });
@@ -235,8 +288,14 @@ router.get('/residents', requireAuth, requireSociety, async (req, res) => {
 router.get('/flats', requireAuth, requireSociety, async (req, res) => {
   const flats = await Flat.find({ society: req.user.society })
     .populate('resident', 'name')
+    .populate('interestedBy', 'name')
     .sort({ flatNumber: 1 });
-  res.json({ flats });
+  const withInterest = flats.map((f) => ({
+    ...f.toObject(),
+    interestedNames: f.interestedBy.map((u) => u.name),
+    amInterested: f.interestedBy.some((u) => u._id.equals(req.user._id)),
+  }));
+  res.json({ flats: withInterest });
 });
 
 // Lets a prospective resident browse a society's flats before joining, via
@@ -255,6 +314,21 @@ router.get('/flats/public', requireAuth, async (req, res) => {
   }
   const flats = await Flat.find({ society: society._id }).select('flatNumber status').sort({ flatNumber: 1 });
   res.json({ society: { id: society._id, name: society.name }, flats });
+});
+
+// A resident flagging interest in a vacant flat within their own society -
+// just a note for the association to see and follow up on manually, not a
+// formal request/approval flow.
+router.post('/flats/:id/interest', requireAuth, requireSociety, async (req, res) => {
+  if (isAssociation(req)) {
+    return res.status(403).json({ message: 'Only residents can express interest in a flat' });
+  }
+  const flat = await Flat.findOne({ _id: req.params.id, society: req.user.society });
+  if (!flat || flat.status !== 'vacant') {
+    return res.status(400).json({ message: 'That flat is not available' });
+  }
+  await Flat.updateOne({ _id: flat._id }, { $addToSet: { interestedBy: req.user._id } });
+  res.json({ success: true });
 });
 
 router.post('/flats', requireAuth, requireSociety, async (req, res) => {
