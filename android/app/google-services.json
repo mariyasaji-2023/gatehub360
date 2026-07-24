@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "739369429807",
+    "project_id": "hub360-b0e95",
+    "storage_bucket": "hub360-b0e95.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:739369429807:android:ece2445c01c92c6b358fda",
+        "android_client_info": {
+          "package_name": "com.gatehub360.gatehub360_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "739369429807-gjla5k72dtqhlmtbhv1k31v0lq1p14ug.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.gatehub360.gatehub360_app",
+            "certificate_hash": "ddbcb4e3eb4de0539f831f7a35fd2fead7859fc5"
+          }
+        },
+        {
+          "client_id": "739369429807-0beo920utffmlo0ap1elhpmfug12h47e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0fNQGSZXlGgxuZ890oXmipx5mz4cEGOo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "739369429807-0beo920utffmlo0ap1elhpmfug12h47e.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
