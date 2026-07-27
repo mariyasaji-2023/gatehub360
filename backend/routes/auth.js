@@ -26,4 +26,13 @@ router.patch('/role', requireAuth, async (req, res) => {
   res.json({ user: { id: _id, name, email, phoneNumber, photoURL, role: user.role, serviceType: user.serviceType } });
 });
 
+router.patch('/device-token', requireAuth, async (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ message: 'Token is required' });
+  }
+  await User.findByIdAndUpdate(req.user._id, { $addToSet: { fcmTokens: token } });
+  res.json({ success: true });
+});
+
 module.exports = router;

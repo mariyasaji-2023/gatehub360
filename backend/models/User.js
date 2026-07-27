@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema(
     },
     society: { type: mongoose.Schema.Types.ObjectId, ref: 'Society', index: true },
     flatNumber: { type: String, trim: true },
+    fcmTokens: { type: [String], default: [] },
   },
   { timestamps: true }
 );

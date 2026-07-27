@@ -1,6 +1,7 @@
 const path = require('path');
 const { initializeApp, cert, getApps } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
+const { getMessaging } = require('firebase-admin/messaging');
 
 if (!getApps().length) {
   // On hosts like Render the credentials file isn't deployed (it's gitignored),
@@ -14,4 +15,4 @@ if (!getApps().length) {
   });
 }
 
-module.exports = { getAuth };
+module.exports = { getAuth, getMessaging };
