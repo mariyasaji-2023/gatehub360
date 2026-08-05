@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
@@ -21,6 +22,8 @@ app.use((req, res, next) => {
   });
   next();
 });
+
+app.get('/privacy-policy', (req, res) => res.sendFile(path.join(__dirname, 'public', 'privacy-policy.html')));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', authRoutes);

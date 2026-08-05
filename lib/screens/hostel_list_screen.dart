@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import '../data/listings_data.dart';
 import '../models/hostel_listing.dart';
+import '../services/auth_service.dart';
+import '../services/hostel_api.dart';
 import '../theme/app_theme.dart';
-import '../widgets/dark_card.dart';
 import '../widgets/emoji_tile.dart';
 import '../widgets/filter_chip_row.dart';
 import '../widgets/hero_search_bar.dart';
@@ -20,7 +21,16 @@ class HostelListScreen extends StatefulWidget {
 class _HostelListScreenState extends State<HostelListScreen> {
   final _searchController = TextEditingController();
   String _filter = 'All';
-  String _search = '';
+  List<MyHostelListing> _listings = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _searchController.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
@@ -28,107 +38,127 @@ class _HostelListScreenState extends State<HostelListScreen> {
     super.dispose();
   }
 
-  List<HostelListing> get _filtered {
-    return hostelListings.where((l) {
-      final matchFilter = _filter == 'All' ||
-          l.type == _filter ||
-          (_filter == 'For Men' && l.gender == 'Men') ||
-          (_filter == 'For Women' && l.gender == 'Women');
-      final q = _search.toLowerCase();
-      final matchSearch = l.title.toLowerCase().contains(q) || l.location.toLowerCase().contains(q);
-      return matchFilter && matchSearch;
-    }).toList();
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final type = ['PG', 'Hostel', 'Service Apt', 'Flat'].contains(_filter) ? _filter : null;
+      final gender = _filter == 'For Men' ? 'Men' : (_filter == 'For Women' ? 'Women' : null);
+      final listings = await HostelApi.fetchAll(type: type, gender: gender);
+      if (!mounted) return;
+      setState(() {
+        _listings = listings;
+        _loading = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _loading = false;
+      });
+    }
+  }
+
+  void _selectFilter(String filter) {
+    setState(() => _filter = filter);
+    _load();
+  }
+
+  List<MyHostelListing> get _filtered {
+    final q = _searchController.text.toLowerCase();
+    if (q.isEmpty) return _listings;
+    return _listings.where((l) => l.title.toLowerCase().contains(q) || l.location.toLowerCase().contains(q)).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
     return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
-        children: [
-          SectionHero(
-            titleStart: 'Find Your Perfect',
-            titleHighlight: 'PG, Hostel or Flat',
-            accentColor: AppColors.brand,
-            child: HeroSearchBar(
-              controller: _searchController,
-              hint: 'Search by location, area, name...',
+      child: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 32),
+          children: [
+            SectionHero(
+              titleStart: 'Find Your Perfect',
+              titleHighlight: 'PG, Hostel or Flat',
               accentColor: AppColors.brand,
-              onSearch: () => setState(() => _search = _searchController.text),
+              child: HeroSearchBar(
+                controller: _searchController,
+                hint: 'Search by location, area, name...',
+                accentColor: AppColors.brand,
+                onSearch: () => setState(() {}),
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Owner Features', style: AppFonts.heading(fontSize: 19, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 16),
-                ...hostelOwnerFeatures.map((f) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: DarkCard(
-                        padding: const EdgeInsets.all(18),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FilterChipRow<String>(
+                    items: hostelFilters,
+                    labelBuilder: (f) => f,
+                    selected: _filter,
+                    accentColor: AppColors.brand,
+                    onSelect: _selectFilter,
+                  ),
+                  const SizedBox(height: 18),
+                  if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 60),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
+                      child: Center(
+                        child: Column(
                           children: [
-                            Text(f.icon, style: const TextStyle(fontSize: 24)),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(f.title, style: AppFonts.heading(fontSize: 14.5, fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 4),
-                                  Text(f.desc, style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.5)),
-                                ],
-                              ),
-                            ),
+                            Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13.5, color: AppColors.muted)),
+                            const SizedBox(height: 12),
+                            OutlinedButton(onPressed: _load, child: const Text('Retry')),
                           ],
                         ),
                       ),
-                    )),
-              ],
+                    )
+                  else ...[
+                    Text('${filtered.length} PGs & Hostels Found', style: AppFonts.heading(fontSize: 18, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 14),
+                    if (filtered.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: Text('No listings found.', style: const TextStyle(fontSize: 13.5, color: AppColors.muted)),
+                        ),
+                      )
+                    else
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 14,
+                          crossAxisSpacing: 14,
+                          childAspectRatio: 0.68,
+                        ),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, i) => _HostelCard(listing: filtered[i]),
+                      ),
+                  ],
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${filtered.length} PGs & Hostels Found', style: AppFonts.heading(fontSize: 18, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 14),
-                FilterChipRow<String>(
-                  items: hostelFilters,
-                  labelBuilder: (f) => f,
-                  selected: _filter,
-                  accentColor: AppColors.brand,
-                  onSelect: (f) => setState(() => _filter = f),
-                ),
-                const SizedBox(height: 18),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 14,
-                    crossAxisSpacing: 14,
-                    childAspectRatio: 0.68,
-                  ),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, i) => _HostelCard(listing: filtered[i]),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
 class _HostelCard extends StatelessWidget {
-  final HostelListing listing;
+  final MyHostelListing listing;
   const _HostelCard({required this.listing});
 
   @override
@@ -139,7 +169,7 @@ class _HostelCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => HostelDetailScreen(id: listing.id)),
+          MaterialPageRoute(builder: (_) => HostelDetailScreen(listing: listing)),
         ),
         child: Container(
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.border)),
@@ -158,18 +188,18 @@ class _HostelCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    PillBadge(label: '✓ ${listing.badge}', color: AppColors.brand),
+                    PillBadge(label: listing.gender, color: AppColors.brand),
                     const SizedBox(height: 8),
                     Text(listing.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 3),
                     Text('📍 ${listing.location}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: AppColors.muted)),
                     const SizedBox(height: 3),
-                    Text('⭐ ${listing.rating} (${listing.reviews})', style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                    Text(listing.type, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
                     const SizedBox(height: 8),
                     RichText(
                       text: TextSpan(
                         children: [
-                          TextSpan(text: '₹${listing.price}', style: AppFonts.heading(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.brand)),
+                          TextSpan(text: '₹${listing.startingPrice}', style: AppFonts.heading(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.brand)),
                           const TextSpan(text: '/mo', style: TextStyle(fontSize: 10.5, color: AppColors.muted)),
                         ],
                       ),

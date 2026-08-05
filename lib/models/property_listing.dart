@@ -1,88 +1,78 @@
-class PropertyListing {
-  final int id;
-  final String emoji;
+String emojiForPropertyType(String type) => switch (type) {
+      'Apartment' => '🏢',
+      'Villa' => '🏡',
+      'Plot' => '🌳',
+      'Commercial' => '🏬',
+      _ => '🏠',
+    };
+
+class MyPropertyListing {
+  final String id;
+  final String type;
+  final String mode;
   final String title;
   final String location;
   final String price;
-  final String type;
   final String bhk;
   final String sqft;
-  final String status;
-  final String badge;
-
-  const PropertyListing({
-    required this.id,
-    required this.emoji,
-    required this.title,
-    required this.location,
-    required this.price,
-    required this.type,
-    required this.bhk,
-    required this.sqft,
-    required this.status,
-    required this.badge,
-  });
-}
-
-class PropertyPriceBreakdown {
-  final String base;
-  final String registration;
-  final String other;
-  final String total;
-
-  const PropertyPriceBreakdown({
-    required this.base,
-    required this.registration,
-    required this.other,
-    required this.total,
-  });
-
-  List<MapEntry<String, String>> get entries => [
-        MapEntry('Base Price', base),
-        MapEntry('Registration & Stamp Duty', registration),
-        MapEntry('Other Charges', other),
-        MapEntry('Total Cost', total),
-      ];
-}
-
-class PropertyDetail {
-  final int id;
-  final String emoji;
-  final String title;
-  final String location;
-  final String price;
-  final String type;
-  final String bhk;
-  final String sqft;
-  final String floor;
-  final String status;
-  final String badge;
-  final String builder;
-  final String facing;
-  final String age;
   final String about;
-  final List<String> amenities;
-  final PropertyPriceBreakdown priceBreakdown;
   final String contact;
+  final bool active;
+  final int unreadEnquiries;
 
-  const PropertyDetail({
+  const MyPropertyListing({
     required this.id,
-    required this.emoji,
+    required this.type,
+    required this.mode,
     required this.title,
     required this.location,
     required this.price,
-    required this.type,
     required this.bhk,
     required this.sqft,
-    required this.floor,
-    required this.status,
-    required this.badge,
-    required this.builder,
-    required this.facing,
-    required this.age,
     required this.about,
-    required this.amenities,
-    required this.priceBreakdown,
     required this.contact,
+    this.active = true,
+    this.unreadEnquiries = 0,
   });
+
+  String get emoji => emojiForPropertyType(type);
+
+  factory MyPropertyListing.fromJson(Map<String, dynamic> json) => MyPropertyListing(
+        id: json['_id'] as String,
+        type: json['type'] as String,
+        mode: json['mode'] as String,
+        title: json['title'] as String,
+        location: json['location'] as String,
+        price: json['price'] as String,
+        bhk: json['bhk'] as String,
+        sqft: json['sqft'] as String,
+        about: json['about'] as String,
+        contact: json['contact'] as String,
+        active: json['active'] as bool? ?? true,
+        unreadEnquiries: json['unreadEnquiries'] as int? ?? 0,
+      );
+}
+
+class PropertyEnquiry {
+  final String id;
+  final String propertyTitle;
+  final String clientPhone;
+  final DateTime createdAt;
+
+  const PropertyEnquiry({
+    required this.id,
+    required this.propertyTitle,
+    required this.clientPhone,
+    required this.createdAt,
+  });
+
+  factory PropertyEnquiry.fromJson(Map<String, dynamic> json) {
+    final property = json['property'] as Map<String, dynamic>?;
+    return PropertyEnquiry(
+      id: json['_id'] as String,
+      propertyTitle: property?['title'] as String? ?? 'Property',
+      clientPhone: json['clientPhone'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+    );
+  }
 }

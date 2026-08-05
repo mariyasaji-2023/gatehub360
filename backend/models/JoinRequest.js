@@ -8,6 +8,7 @@ const joinRequestSchema = new mongoose.Schema(
     flat: { type: mongoose.Schema.Types.ObjectId, ref: 'Flat', default: null },
     requester: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     status: { type: String, enum: STATUSES, default: 'pending' },
+    dismissed: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

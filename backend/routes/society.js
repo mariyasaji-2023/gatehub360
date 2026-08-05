@@ -226,12 +226,29 @@ router.get('/join-requests', requireAuth, requireSociety, async (req, res) => {
 
 // The current user's most recent join request (any status), so the join
 // screen can show "pending"/"declined" instead of the join form again.
+// A rejected request the user has dismissed is excluded so it doesn't
+// keep resurfacing every time they open the app.
 router.get('/join-requests/mine', requireAuth, async (req, res) => {
-  const joinRequest = await JoinRequest.findOne({ requester: req.user._id })
+  const joinRequest = await JoinRequest.findOne({
+    requester: req.user._id,
+    $or: [{ status: { $ne: 'rejected' } }, { dismissed: { $ne: true } }],
+  })
     .sort({ createdAt: -1 })
     .populate('flat', 'flatNumber')
     .populate('society', 'name');
   res.json({ joinRequest });
+});
+
+// Permanently hides a rejected request's banner. Only the requester can
+// dismiss their own request, and only once it's been rejected.
+router.post('/join-requests/:id/dismiss', requireAuth, async (req, res) => {
+  const joinRequest = await JoinRequest.findOne({ _id: req.params.id, requester: req.user._id, status: 'rejected' });
+  if (!joinRequest) {
+    return res.status(404).json({ message: 'Join request not found' });
+  }
+  joinRequest.dismissed = true;
+  await joinRequest.save();
+  res.json({ success: true });
 });
 
 router.patch('/join-requests/:id', requireAuth, requireSociety, async (req, res) => {

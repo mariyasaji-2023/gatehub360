@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'hostel_list_screen.dart';
+import '../services/push_notifications.dart';
+import 'my_hostels_screen.dart';
+import 'my_properties_screen.dart';
 import 'my_services_screen.dart';
 import 'profile_screen.dart';
 import 'property_list_screen.dart';
@@ -43,6 +47,7 @@ class _RootShellState extends State<RootShell> {
         _user = user;
         _loading = false;
       });
+      unawaited(PushNotifications.init());
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -100,27 +105,32 @@ class _RootShellState extends State<RootShell> {
       return [society, services, profile];
     }
 
-    return [
-      society,
-      services,
-      _Tab(
-        page: HostelListScreen(),
-        item: BottomNavigationBarItem(
+    final property = _Tab(
+      page: role == UserRole.propertyOwner ? const MyPropertiesScreen() : const PropertyListScreen(),
+      item: const BottomNavigationBarItem(
+        icon: Icon(Icons.villa_outlined),
+        activeIcon: Icon(Icons.villa),
+        label: 'Property',
+      ),
+    );
+
+    if (role == UserRole.propertyOwner) {
+      return [property, services, profile];
+    }
+
+    if (role == UserRole.pgOwner) {
+      final hostel = _Tab(
+        page: const MyHostelsScreen(),
+        item: const BottomNavigationBarItem(
           icon: Icon(Icons.hotel_outlined),
           activeIcon: Icon(Icons.hotel),
           label: 'PG & Hostels',
         ),
-      ),
-      _Tab(
-        page: PropertyListScreen(),
-        item: BottomNavigationBarItem(
-          icon: Icon(Icons.villa_outlined),
-          activeIcon: Icon(Icons.villa),
-          label: 'Property',
-        ),
-      ),
-      profile,
-    ];
+      );
+      return [hostel, services, profile];
+    }
+
+    return [society, services, property, profile];
   }
 
   @override

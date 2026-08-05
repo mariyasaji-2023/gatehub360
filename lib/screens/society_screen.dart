@@ -28,6 +28,7 @@ class _SocietyScreenState extends State<SocietyScreen> {
   Society? _society;
   List<Society> _societies = [];
   SocietyJoinRequest? _myRequest;
+  String? _dismissedRequestId;
 
   @override
   void initState() {
@@ -65,6 +66,12 @@ class _SocietyScreenState extends State<SocietyScreen> {
       if (!mounted) return;
       setState(() {
         _error = e.message;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Something went wrong. Please try again.';
         _loading = false;
       });
     }
@@ -227,12 +234,30 @@ class _SocietyScreenState extends State<SocietyScreen> {
               ),
             ),
             const SizedBox(height: 16),
-          ] else if (_myRequest?.status == JoinRequestStatus.rejected) ...[
+          ] else if (_myRequest?.status == JoinRequestStatus.rejected && _myRequest!.id != _dismissedRequestId) ...[
             DarkCard(
               borderColor: AppColors.danger,
-              child: Text(
-                'Your request to join ${_myRequest!.societyName ?? 'that society'} was declined.',
-                style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Your request to join ${_myRequest!.societyName ?? 'that society'} was declined.',
+                      style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.4),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      final id = _myRequest!.id;
+                      setState(() => _dismissedRequestId = id);
+                      unawaited(SocietyApi.dismissJoinRequest(id));
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.only(left: 10),
+                      child: Icon(Icons.close, size: 18, color: AppColors.muted),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),

@@ -37,6 +37,7 @@ class _RoleRouter extends StatefulWidget {
 
 class _RoleRouterState extends State<_RoleRouter> {
   bool _loading = true;
+  bool _hasError = false;
   UserRole? _role;
 
   @override
@@ -46,6 +47,10 @@ class _RoleRouterState extends State<_RoleRouter> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _hasError = false;
+    });
     try {
       final user = await AuthService.syncCurrentUser();
       if (!mounted) return;
@@ -53,9 +58,15 @@ class _RoleRouterState extends State<_RoleRouter> {
         _role = user.role;
         _loading = false;
       });
-    } catch (_) {
+    } catch (e, st) {
+      // TEMP DEBUG: log the real cause behind the generic connection error.
+      debugPrint('AUTH_GATE_DEBUG error: $e');
+      debugPrint('AUTH_GATE_DEBUG stack: $st');
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _hasError = true;
+        _loading = false;
+      });
     }
   }
 
@@ -63,6 +74,26 @@ class _RoleRouterState extends State<_RoleRouter> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_hasError) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Could not reach the server. Check your connection and try again.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(onPressed: _load, child: const Text('Retry')),
+              ],
+            ),
+          ),
+        ),
+      );
     }
     return _role == null ? const RoleSelectionScreen() : const RootShell();
   }

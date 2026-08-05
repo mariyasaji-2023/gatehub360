@@ -98,6 +98,10 @@ class SocietyApi {
     _decode(await _patch('/society/join-requests/$id', {'status': approve ? 'approved' : 'rejected'}));
   }
 
+  static Future<void> dismissJoinRequest(String id) async {
+    _decode(await _post('/society/join-requests/$id/dismiss', {}));
+  }
+
   static Future<void> leaveSociety() async {
     _decode(await _post('/society/leave', {}));
   }
@@ -221,7 +225,12 @@ class SocietyApi {
   }
 
   static Map<String, dynamic> _decode(http.Response response) {
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final Map<String, dynamic> data;
+    try {
+      data = jsonDecode(response.body) as Map<String, dynamic>;
+    } on FormatException {
+      throw ApiException('Server error. Please try again.');
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(data['message'] as String? ?? 'Something went wrong. Please try again.');
     }
@@ -236,21 +245,17 @@ class SocietyApi {
     return (await firebaseUser.getIdToken())!;
   }
 
-  static Future<http.Response> _get(String path) async {
-    try {
+  static Future<http.Response> _get(String path) {
+    return sendWithRetry(() async {
       final idToken = await _idToken();
       return await http
           .get(Uri.parse('$apiBaseUrl$path'), headers: {'Authorization': 'Bearer $idToken'})
-          .timeout(const Duration(seconds: 15));
-    } on ApiException {
-      rethrow;
-    } catch (_) {
-      throw ApiException('Could not reach the server. Check your connection and try again.');
-    }
+          .timeout(const Duration(seconds: 40));
+    });
   }
 
-  static Future<http.Response> _post(String path, Map<String, dynamic> body) async {
-    try {
+  static Future<http.Response> _post(String path, Map<String, dynamic> body) {
+    return sendWithRetry(() async {
       final idToken = await _idToken();
       return await http
           .post(
@@ -258,16 +263,12 @@ class SocietyApi {
             headers: {'Authorization': 'Bearer $idToken', 'Content-Type': 'application/json'},
             body: jsonEncode(body),
           )
-          .timeout(const Duration(seconds: 15));
-    } on ApiException {
-      rethrow;
-    } catch (_) {
-      throw ApiException('Could not reach the server. Check your connection and try again.');
-    }
+          .timeout(const Duration(seconds: 40));
+    });
   }
 
-  static Future<http.Response> _patch(String path, Map<String, dynamic> body) async {
-    try {
+  static Future<http.Response> _patch(String path, Map<String, dynamic> body) {
+    return sendWithRetry(() async {
       final idToken = await _idToken();
       return await http
           .patch(
@@ -275,24 +276,16 @@ class SocietyApi {
             headers: {'Authorization': 'Bearer $idToken', 'Content-Type': 'application/json'},
             body: jsonEncode(body),
           )
-          .timeout(const Duration(seconds: 15));
-    } on ApiException {
-      rethrow;
-    } catch (_) {
-      throw ApiException('Could not reach the server. Check your connection and try again.');
-    }
+          .timeout(const Duration(seconds: 40));
+    });
   }
 
-  static Future<http.Response> _delete(String path) async {
-    try {
+  static Future<http.Response> _delete(String path) {
+    return sendWithRetry(() async {
       final idToken = await _idToken();
       return await http
           .delete(Uri.parse('$apiBaseUrl$path'), headers: {'Authorization': 'Bearer $idToken'})
-          .timeout(const Duration(seconds: 15));
-    } on ApiException {
-      rethrow;
-    } catch (_) {
-      throw ApiException('Could not reach the server. Check your connection and try again.');
-    }
+          .timeout(const Duration(seconds: 40));
+    });
   }
 }

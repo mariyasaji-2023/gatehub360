@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'screens/auth_gate.dart';
+import 'services/push_notifications.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -17,6 +18,7 @@ class GateHub360App extends StatelessWidget {
     return MaterialApp(
       title: 'GateHub360',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: PushNotifications.messengerKey,
       theme: AppTheme.dark,
       home: const AuthGate(),
     );

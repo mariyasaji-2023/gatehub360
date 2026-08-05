@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_auth_service.dart';
 import '../theme/app_theme.dart';
@@ -176,7 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               width: 18,
                               child: CircularProgressIndicator(strokeWidth: 2.2),
                             )
-                          : const Icon(Icons.g_mobiledata, size: 26),
+                          : SvgPicture.asset('assets/images/google_logo.svg', height: 18, width: 18),
                       label: const Text('Continue with Google'),
                       style: OutlinedButton.styleFrom(
                         backgroundColor: AppColors.surfaceAlt,

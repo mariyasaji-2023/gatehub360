@@ -21,12 +21,6 @@ const _roleOptions = [
     subtitle: 'Society Management — visitors, maintenance & complaints',
   ),
   _RoleOption(
-    role: UserRole.pgOwner,
-    emoji: '🛏️',
-    title: 'PG Owner',
-    subtitle: 'PG & Hostel Management — list and manage your property',
-  ),
-  _RoleOption(
     role: UserRole.propertyOwner,
     emoji: '🏘️',
     title: 'Property Owner',
