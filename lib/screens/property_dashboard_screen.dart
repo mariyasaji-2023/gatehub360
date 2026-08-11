@@ -13,10 +13,11 @@ import 'add_rooms_screen.dart';
 import 'add_tenant_screen.dart';
 import 'collect_payment_screen.dart';
 import 'property_announcements_screen.dart';
+import 'property_complaints_screen.dart';
 import 'property_units_screen.dart';
 import 'tenants_screen.dart';
 
-List<StatOverviewItem> _overviewItems(RentSummary? rent, VacancySummary? vacancy, int? openComplaints) {
+List<StatOverviewItem> _overviewItems(RentSummary? rent, VacancySummary? vacancy, int? openComplaints, VoidCallback onOpenComplaints) {
   final month = _monthNames[DateTime.now().month - 1];
   return [
     StatOverviewItem(icon: Icons.payments_outlined, value: '₹${rent?.todayCollection ?? 0}', label: "Today's Collection", color: AppColors.success),
@@ -25,7 +26,7 @@ List<StatOverviewItem> _overviewItems(RentSummary? rent, VacancySummary? vacancy
     StatOverviewItem(icon: Icons.pending_actions_outlined, value: '₹${rent?.allTimeDues ?? 0}', label: 'All Time Dues', color: AppColors.amber),
     StatOverviewItem(icon: Icons.king_bed_outlined, value: '${vacancy?.vacantUnits ?? 0}', label: 'Vacant Beds', color: AppColors.brand),
     StatOverviewItem(icon: Icons.single_bed_outlined, value: '${vacancy?.occupiedUnits ?? 0}', label: 'Occupied Beds', color: AppColors.brand),
-    StatOverviewItem(icon: Icons.report_problem_outlined, value: '${openComplaints ?? 0}', label: 'Active Complaints', color: AppColors.danger),
+    StatOverviewItem(icon: Icons.report_problem_outlined, value: '${openComplaints ?? 0}', label: 'Active Complaints', color: AppColors.danger, onTap: onOpenComplaints),
   ];
 }
 
@@ -119,6 +120,15 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
     );
   }
 
+  Future<void> _openComplaintsList() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PropertyComplaintsScreen(propertyId: widget.listing.id, propertyTitle: widget.listing.title)),
+    );
+    final openComplaints = await _loadOpenComplaints();
+    if (!mounted) return;
+    setState(() => _openComplaints = openComplaints);
+  }
+
   Future<void> _openAddComplaint() async {
     final submitted = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => AddPropertyComplaintScreen(propertyId: widget.listing.id, propertyTitle: widget.listing.title)),
@@ -198,7 +208,7 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
               ],
             ),
           ),
-          StatOverviewBar(items: _overviewItems(_rentSummary, _vacancy, _openComplaints)),
+          StatOverviewBar(items: _overviewItems(_rentSummary, _vacancy, _openComplaints, _openComplaintsList)),
           QuickActionsSection(actions: _quickActions),
           hasUnits ? _buildOccupancyCard() : _buildEmptyOccupancyCard(),
           const SizedBox(height: 20),

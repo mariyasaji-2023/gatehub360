@@ -6,8 +6,9 @@ class StatOverviewItem {
   final String value;
   final String label;
   final Color color;
+  final VoidCallback? onTap;
 
-  const StatOverviewItem({required this.icon, required this.value, required this.label, required this.color});
+  const StatOverviewItem({required this.icon, required this.value, required this.label, required this.color, this.onTap});
 }
 
 /// Horizontally scrollable strip of at-a-glance stat cards — e.g. dues,
@@ -29,7 +30,7 @@ class StatOverviewBar extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
           final item = items[index];
-          return Container(
+          final card = Container(
             width: 132,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -61,6 +62,12 @@ class StatOverviewBar extends StatelessWidget {
                 ),
               ],
             ),
+          );
+          if (item.onTap == null) return card;
+          return Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(borderRadius: BorderRadius.circular(16), onTap: item.onTap, child: card),
           );
         },
       ),

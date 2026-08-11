@@ -6,6 +6,7 @@ import '../models/tenant.dart';
 import '../services/auth_service.dart';
 import '../services/property_api.dart';
 import '../theme/app_theme.dart';
+import 'property_complaints_screen.dart';
 
 /// Opened from the property dashboard's "Add Complaint" quick action.
 /// Fields backed by real data (description, location, urgent, issue type,
@@ -197,6 +198,15 @@ class _AddPropertyComplaintScreenState extends State<AddPropertyComplaintScreen>
             Text(widget.propertyTitle, style: const TextStyle(fontSize: 12.5, color: AppColors.muted, fontWeight: FontWeight.w500)),
           ],
         ),
+        actions: [
+          IconButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => PropertyComplaintsScreen(propertyId: widget.propertyId, propertyTitle: widget.propertyTitle)),
+            ),
+            icon: const Icon(Icons.list_alt_outlined),
+            tooltip: 'All Complaints',
+          ),
+        ],
       ),
       body: Form(
         key: _formKey,
