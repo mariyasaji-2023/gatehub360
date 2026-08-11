@@ -93,8 +93,8 @@ class _TenantInviteContentState extends State<TenantInviteContent> {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('${widget.tenant.name} added', style: AppFonts.heading(fontSize: 17, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),

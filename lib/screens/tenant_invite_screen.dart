@@ -28,7 +28,12 @@ class TenantInviteScreen extends StatelessWidget {
           ],
         ),
       ),
-      body: SafeArea(child: TenantInviteContent(tenant: tenant, propertyTitle: propertyTitle)),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: TenantInviteContent(tenant: tenant, propertyTitle: propertyTitle),
+        ),
+      ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),

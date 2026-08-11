@@ -8,6 +8,7 @@ const RentPayment = require('../models/RentPayment');
 const Unit = require('../models/Unit');
 const Announcement = require('../models/Announcement');
 const PropertyJoinRequest = require('../models/PropertyJoinRequest');
+const PropertyComplaint = require('../models/PropertyComplaint');
 const { notifyOwner } = require('../utils/pushNotify');
 const { dueMonths, isCurrentMonth } = require('../utils/rentDues');
 
@@ -524,6 +525,80 @@ router.delete('/:id/announcements/:announcementId', requireAuth, async (req, res
     return res.status(404).json({ message: 'Announcement not found' });
   }
   res.json({ success: true });
+});
+
+// --- Complaints (maintenance tickets) ---
+
+router.get('/:id/complaints', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const complaints = await PropertyComplaint.find({ property: property._id }).populate('tenant', 'name phone').sort({ createdAt: -1 });
+  res.json({ complaints });
+});
+
+router.get('/:id/complaints/count', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const count = await PropertyComplaint.countDocuments({ property: property._id, status: { $ne: 'resolved' } });
+  res.json({ count });
+});
+
+router.post('/:id/complaints', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const { description, location, category, urgent, tenantId } = req.body;
+  if (!description || !category) {
+    return res.status(400).json({ message: 'Description and issue type are required' });
+  }
+  if (!PropertyComplaint.CATEGORIES.includes(category)) {
+    return res.status(400).json({ message: 'Invalid issue type' });
+  }
+  if (location !== undefined && location !== null && !PropertyComplaint.LOCATIONS.includes(location)) {
+    return res.status(400).json({ message: 'Invalid issue location' });
+  }
+
+  let tenant;
+  if (tenantId) {
+    tenant = await Tenant.findOne({ _id: tenantId, property: property._id });
+    if (!tenant) {
+      return res.status(404).json({ message: 'Tenant not found' });
+    }
+  }
+
+  const complaint = await PropertyComplaint.create({
+    property: property._id,
+    owner: req.user._id,
+    tenant: tenant?._id,
+    description,
+    location: location || undefined,
+    category,
+    urgent: Boolean(urgent),
+  });
+  res.status(201).json({ complaint });
+});
+
+router.patch('/:id/complaints/:complaintId', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const complaint = await PropertyComplaint.findOne({ _id: req.params.complaintId, property: property._id });
+  if (!complaint) {
+    return res.status(404).json({ message: 'Complaint not found' });
+  }
+  const { status } = req.body;
+  if (!PropertyComplaint.STATUSES.includes(status)) {
+    return res.status(400).json({ message: 'Invalid status' });
+  }
+  complaint.status = status;
+  await complaint.save();
+  res.json({ complaint });
 });
 
 // --- Rent collection (owner side) ---

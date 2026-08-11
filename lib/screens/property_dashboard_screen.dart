@@ -8,15 +8,15 @@ import '../theme/app_theme.dart';
 import '../widgets/empty_state_section_card.dart';
 import '../widgets/quick_actions_section.dart';
 import '../widgets/stat_overview_bar.dart';
+import 'add_property_complaint_screen.dart';
 import 'add_rooms_screen.dart';
 import 'add_tenant_screen.dart';
 import 'collect_payment_screen.dart';
 import 'property_announcements_screen.dart';
-import 'property_invite_screen.dart';
 import 'property_units_screen.dart';
 import 'tenants_screen.dart';
 
-List<StatOverviewItem> _overviewItems(RentSummary? rent, VacancySummary? vacancy) {
+List<StatOverviewItem> _overviewItems(RentSummary? rent, VacancySummary? vacancy, int? openComplaints) {
   final month = _monthNames[DateTime.now().month - 1];
   return [
     StatOverviewItem(icon: Icons.payments_outlined, value: '₹${rent?.todayCollection ?? 0}', label: "Today's Collection", color: AppColors.success),
@@ -25,7 +25,7 @@ List<StatOverviewItem> _overviewItems(RentSummary? rent, VacancySummary? vacancy
     StatOverviewItem(icon: Icons.pending_actions_outlined, value: '₹${rent?.allTimeDues ?? 0}', label: 'All Time Dues', color: AppColors.amber),
     StatOverviewItem(icon: Icons.king_bed_outlined, value: '${vacancy?.vacantUnits ?? 0}', label: 'Vacant Beds', color: AppColors.brand),
     StatOverviewItem(icon: Icons.single_bed_outlined, value: '${vacancy?.occupiedUnits ?? 0}', label: 'Occupied Beds', color: AppColors.brand),
-    StatOverviewItem(icon: Icons.report_problem_outlined, value: '0', label: 'Active Complaints', color: AppColors.danger),
+    StatOverviewItem(icon: Icons.report_problem_outlined, value: '${openComplaints ?? 0}', label: 'Active Complaints', color: AppColors.danger),
   ];
 }
 
@@ -49,6 +49,7 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
   AuthUser? _user;
   RentSummary? _rentSummary;
   VacancySummary? _vacancy;
+  int? _openComplaints;
   bool _publishing = false;
 
   @override
@@ -61,12 +62,22 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
     final user = await AuthService.syncCurrentUser();
     final rentSummary = await _loadRentSummary();
     final vacancy = await _loadVacancy();
+    final openComplaints = await _loadOpenComplaints();
     if (!mounted) return;
     setState(() {
       _user = user;
       _rentSummary = rentSummary;
       _vacancy = vacancy;
+      _openComplaints = openComplaints;
     });
+  }
+
+  Future<int?> _loadOpenComplaints() async {
+    try {
+      return await PropertyApi.fetchOpenComplaintsCount(widget.listing.id);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<RentSummary?> _loadRentSummary() async {
@@ -108,10 +119,14 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
     );
   }
 
-  Future<void> _openInviteTenant() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => PropertyInviteScreen(propertyId: widget.listing.id, propertyTitle: widget.listing.title)),
+  Future<void> _openAddComplaint() async {
+    final submitted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => AddPropertyComplaintScreen(propertyId: widget.listing.id, propertyTitle: widget.listing.title)),
     );
+    if (submitted != true || !mounted) return;
+    final openComplaints = await _loadOpenComplaints();
+    if (!mounted) return;
+    setState(() => _openComplaints = openComplaints);
   }
 
   Future<void> _openCollectPayment() async {
@@ -152,9 +167,8 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
   // is built. More actions to come.
   List<QuickAction> get _quickActions => [
         QuickAction(icon: Icons.person_add_alt_outlined, label: 'Add Tenant', onTap: _openAddTenant),
-        QuickAction(icon: Icons.qr_code_2_outlined, label: 'Invite Tenant', onTap: _openInviteTenant),
         QuickAction(icon: Icons.groups_outlined, label: 'Tenants', onTap: _openTenants),
-        const QuickAction(icon: Icons.report_problem_outlined, label: 'View Complaints'),
+        QuickAction(icon: Icons.report_problem_outlined, label: 'Add Complaint', onTap: _openAddComplaint),
         QuickAction(icon: Icons.request_page_outlined, label: 'Collect Payment', onTap: _openCollectPayment),
         QuickAction(icon: Icons.campaign_outlined, label: 'Send Announcement', onTap: _openAnnouncements),
         const QuickAction(icon: Icons.trending_down_outlined, label: 'Add Expense'),
@@ -184,7 +198,7 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
               ],
             ),
           ),
-          StatOverviewBar(items: _overviewItems(_rentSummary, _vacancy)),
+          StatOverviewBar(items: _overviewItems(_rentSummary, _vacancy, _openComplaints)),
           QuickActionsSection(actions: _quickActions),
           hasUnits ? _buildOccupancyCard() : _buildEmptyOccupancyCard(),
           const SizedBox(height: 20),

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/property_announcement.dart';
+import '../models/property_complaint.dart';
 import '../models/property_join_request.dart';
 import '../models/property_listing.dart';
 import '../models/property_unit.dart';
@@ -229,6 +230,44 @@ class PropertyApi {
     });
     final data = _decode(response);
     return data['tenant'] != null ? Tenant.fromJson(data['tenant'] as Map<String, dynamic>) : null;
+  }
+
+  // --- Complaints (maintenance tickets) ---
+
+  static Future<List<PropertyComplaint>> fetchComplaints(String propertyId) async {
+    final response = await _get('/properties/$propertyId/complaints');
+    final complaints = _decode(response)['complaints'] as List;
+    return complaints.map((j) => PropertyComplaint.fromJson(j as Map<String, dynamic>)).toList();
+  }
+
+  /// Count of not-yet-resolved complaints — powers the dashboard's
+  /// "Active Complaints" stat tile.
+  static Future<int> fetchOpenComplaintsCount(String propertyId) async {
+    final response = await _get('/properties/$propertyId/complaints/count');
+    return _decode(response)['count'] as int;
+  }
+
+  static Future<PropertyComplaint> createComplaint(
+    String propertyId, {
+    required String description,
+    required ComplaintCategory category,
+    ComplaintLocation? location,
+    bool urgent = false,
+    String? tenantId,
+  }) async {
+    final response = await _post('/properties/$propertyId/complaints', {
+      'description': description,
+      'category': category.wireValue,
+      if (location != null) 'location': location.wireValue,
+      'urgent': urgent,
+      if (tenantId != null) 'tenantId': tenantId,
+    });
+    return PropertyComplaint.fromJson(_decode(response)['complaint'] as Map<String, dynamic>);
+  }
+
+  static Future<PropertyComplaint> updateComplaintStatus(String propertyId, String complaintId, ComplaintStatus status) async {
+    final response = await _patch('/properties/$propertyId/complaints/$complaintId', {'status': status.wireValue});
+    return PropertyComplaint.fromJson(_decode(response)['complaint'] as Map<String, dynamic>);
   }
 
   // --- Announcements (owner side) ---

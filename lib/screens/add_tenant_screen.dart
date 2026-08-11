@@ -4,7 +4,9 @@ import '../models/tenant.dart';
 import '../services/property_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/pill_badge.dart';
+import '../widgets/property_invite_content.dart';
 import '../widgets/tenant_invite_content.dart';
+import 'property_join_requests_screen.dart';
 
 const _monthAbbr = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -689,23 +691,39 @@ class _AddTenantScreenState extends State<AddTenantScreen> with SingleTickerProv
 
   Widget _buildInviteTab() {
     final tenant = _createdTenant;
-    if (tenant == null) {
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-        children: [
-          const SizedBox(height: 40),
-          const Icon(Icons.qr_code_2_outlined, size: 40, color: AppColors.muted),
-          const SizedBox(height: 14),
-          Text('Invite code not generated yet', style: AppFonts.heading(fontSize: 15.5, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
+    final propertyTitle = widget.propertyTitle ?? 'This property';
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: Text('Invite a tenant', style: AppFonts.heading(fontSize: 17, fontWeight: FontWeight.w800))),
+            TextButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => PropertyJoinRequestsScreen(propertyId: widget.propertyId, propertyTitle: propertyTitle)),
+              ),
+              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              icon: const Icon(Icons.playlist_add_check_outlined, size: 18),
+              label: const Text('Requests', style: TextStyle(fontSize: 12.5)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        PropertyInviteContent(propertyId: widget.propertyId, propertyTitle: propertyTitle),
+        if (tenant != null) ...[
+          const Padding(padding: EdgeInsets.symmetric(vertical: 26), child: Divider(height: 1)),
+          Text("${tenant.name}'s join code", style: AppFonts.heading(fontSize: 15, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
           const Text(
-            "Fill in Tenant Details and Stay Details, then tap Add Tenant below — the join code and QR to share will show up here.",
+            "Since you added them yourself just now, here's their code directly — no need to wait for a joining request.",
             style: TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.4),
           ),
+          const SizedBox(height: 14),
+          TenantInviteContent(tenant: tenant, propertyTitle: widget.propertyTitle),
         ],
-      );
-    }
-    return TenantInviteContent(tenant: tenant, propertyTitle: widget.propertyTitle);
+      ],
+    );
   }
 
   @override
