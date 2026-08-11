@@ -9,8 +9,15 @@ class _RoleOption {
   final String emoji;
   final String title;
   final String subtitle;
+  final bool disabled;
 
-  const _RoleOption({required this.role, required this.emoji, required this.title, required this.subtitle});
+  const _RoleOption({
+    required this.role,
+    required this.emoji,
+    required this.title,
+    required this.subtitle,
+    this.disabled = false,
+  });
 }
 
 const _roleOptions = [
@@ -19,6 +26,8 @@ const _roleOptions = [
     emoji: '🏢',
     title: 'Apartment Association',
     subtitle: 'Society Management — visitors, maintenance & complaints',
+    // Temporarily on hold — re-enable by removing this flag.
+    disabled: true,
   ),
   _RoleOption(
     role: UserRole.propertyOwner,
@@ -97,32 +106,56 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final option = _roleOptions[index];
-                    final selected = _selectedRole == option.role;
+                    final selected = !option.disabled && _selectedRole == option.role;
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        DarkCard(
-                          borderColor: selected ? AppColors.brand : null,
-                          onTap: () => setState(() => _selectedRole = option.role),
-                          child: Row(
-                            children: [
-                              Text(option.emoji, style: const TextStyle(fontSize: 28)),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(option.title, style: AppFonts.heading(fontSize: 15, fontWeight: FontWeight.w700)),
-                                    const SizedBox(height: 2),
-                                    Text(option.subtitle, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
-                                  ],
+                        Opacity(
+                          opacity: option.disabled ? 0.45 : 1,
+                          child: DarkCard(
+                            borderColor: selected ? AppColors.brand : null,
+                            onTap: option.disabled ? null : () => setState(() => _selectedRole = option.role),
+                            child: Row(
+                              children: [
+                                Text(option.emoji, style: const TextStyle(fontSize: 28)),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            option.title,
+                                            style: AppFonts.heading(fontSize: 15, fontWeight: FontWeight.w700),
+                                          ),
+                                          if (option.disabled) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.muted.withValues(alpha: 0.2),
+                                                borderRadius: BorderRadius.circular(999),
+                                              ),
+                                              child: const Text(
+                                                'Coming soon',
+                                                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.muted),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(option.subtitle, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              Icon(
-                                selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                                color: selected ? AppColors.brand : AppColors.muted,
-                              ),
-                            ],
+                                Icon(
+                                  selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                                  color: selected ? AppColors.brand : AppColors.muted,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],

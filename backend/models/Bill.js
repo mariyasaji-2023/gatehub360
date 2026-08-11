@@ -10,7 +10,7 @@ const billSchema = new mongoose.Schema(
     amount: { type: Number, required: true },
     status: { type: String, enum: ['unpaid', 'paid'], default: 'unpaid' },
     paidAt: { type: Date },
-    razorpayPaymentId: { type: String },
+    razorpayPaymentId: { type: String }
   },
   { timestamps: true }
 );

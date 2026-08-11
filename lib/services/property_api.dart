@@ -4,6 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/property_listing.dart';
+import '../models/property_unit.dart';
+import '../models/rent_payment.dart';
+import '../models/tenant.dart';
 import 'api_config.dart';
 import 'auth_service.dart';
 
@@ -109,6 +112,107 @@ class PropertyApi {
     final response = await _get('/properties/$propertyId/enquiries');
     final enquiries = _decode(response)['enquiries'] as List;
     return enquiries.map((j) => PropertyEnquiry.fromJson(j as Map<String, dynamic>)).toList();
+  }
+
+  // --- Vacancy management ---
+
+  /// Adds one or more floors to the property. Safe to call with floors that
+  /// already exist - the backend dedupes.
+  static Future<List<String>> addFloors(String propertyId, List<String> floors) async {
+    final response = await _post('/properties/$propertyId/floors', {'floors': floors});
+    return (_decode(response)['floors'] as List).cast<String>();
+  }
+
+  static Future<VacancySummary> fetchVacancySummary(String propertyId) async {
+    final response = await _get('/properties/$propertyId/vacancy');
+    return VacancySummary.fromJson(_decode(response));
+  }
+
+  /// Creates individual trackable units from stepper rows (a row with
+  /// count: 3 becomes 3 separate vacant units on that floor).
+  static Future<List<PropertyUnit>> addUnits(String propertyId, {required String floor, required List<UnitRowInput> rows}) async {
+    final response = await _post('/properties/$propertyId/units', {
+      'floor': floor,
+      'rows': rows.map((r) => r.toJson()).toList(),
+    });
+    final units = _decode(response)['units'] as List;
+    return units.map((j) => PropertyUnit.fromJson(j as Map<String, dynamic>)).toList();
+  }
+
+  static Future<List<PropertyUnit>> fetchUnits(String propertyId, {String? floor}) async {
+    final query = floor != null ? '?floor=${Uri.encodeQueryComponent(floor)}' : '';
+    final response = await _get('/properties/$propertyId/units$query');
+    final units = _decode(response)['units'] as List;
+    return units.map((j) => PropertyUnit.fromJson(j as Map<String, dynamic>)).toList();
+  }
+
+  static Future<PropertyUnit> updateUnitStatus(String propertyId, String unitId, String status) async {
+    final response = await _patch('/properties/$propertyId/units/$unitId', {'status': status});
+    return PropertyUnit.fromJson(_decode(response)['unit'] as Map<String, dynamic>);
+  }
+
+  static Future<DateTime> publishVacancy(String propertyId) async {
+    final response = await _post('/properties/$propertyId/publish-vacancy', {});
+    return DateTime.parse(_decode(response)['vacancyPublishedAt'] as String);
+  }
+
+  // --- Tenant management ---
+
+  /// Tenants the signed-in owner has added for one of their properties.
+  static Future<List<Tenant>> fetchTenants(String propertyId) async {
+    final response = await _get('/properties/$propertyId/tenants');
+    final tenants = _decode(response)['tenants'] as List;
+    return tenants.map((j) => Tenant.fromJson(j as Map<String, dynamic>)).toList();
+  }
+
+  static Future<Tenant> addTenant(
+    String propertyId, {
+    required String name,
+    required String phone,
+    String? email,
+    String? roomNumber,
+    required num monthlyRent,
+    required DateTime moveInDate,
+  }) async {
+    final response = await _post('/properties/$propertyId/tenants', {
+      'name': name,
+      'phone': phone,
+      if (email != null && email.isNotEmpty) 'email': email,
+      if (roomNumber != null && roomNumber.isNotEmpty) 'roomNumber': roomNumber,
+      'monthlyRent': monthlyRent,
+      'moveInDate': moveInDate.toIso8601String(),
+    });
+    return Tenant.fromJson(_decode(response)['tenant'] as Map<String, dynamic>);
+  }
+
+  // --- Rent collection (owner side) ---
+
+  /// One tenant's full rent picture — which months are due, and paid history.
+  static Future<TenantRentDetail> fetchTenantRent(String propertyId, String tenantId) async {
+    final response = await _get('/properties/$propertyId/tenants/$tenantId/rent');
+    return TenantRentDetail.fromJson(_decode(response));
+  }
+
+  /// Owner records rent they collected themselves (cash/UPI/bank transfer).
+  static Future<RentPaymentRecord> collectRentManually(
+    String propertyId,
+    String tenantId, {
+    required int month,
+    required int year,
+    required String method,
+  }) async {
+    final response = await _patch('/properties/$propertyId/tenants/$tenantId/rent', {
+      'month': month,
+      'year': year,
+      'method': method,
+    });
+    return RentPaymentRecord.fromJson(_decode(response)['payment'] as Map<String, dynamic>);
+  }
+
+  /// Dashboard-level rent aggregate for one property.
+  static Future<RentSummary> fetchRentSummary(String propertyId) async {
+    final response = await _get('/properties/$propertyId/rent-summary');
+    return RentSummary.fromJson(_decode(response));
   }
 
   static Map<String, dynamic> _decode(http.Response response) {

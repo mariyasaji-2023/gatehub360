@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/society.dart';
+import '../models/society_bill.dart';
 import '../models/society_flat.dart';
 import '../models/society_join_request.dart';
 import '../models/society_search_result.dart';
@@ -11,8 +12,19 @@ import '../services/society_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
 import '../widgets/flat_picker_sheet.dart';
+import '../widgets/gradient_banner.dart';
+import '../widgets/home_greeting_header.dart';
+import '../widgets/pill_badge.dart';
 import '../widgets/section_hero.dart';
+import 'profile_screen.dart';
+import 'property_list_screen.dart';
+import 'services_list_screen.dart';
+import 'society_billing_screen.dart';
+import 'society_complaints_screen.dart';
 import 'society_dashboard_screen.dart';
+import 'society_directory_screen.dart';
+import 'society_flats_screen.dart';
+import 'society_notices_screen.dart';
 
 class SocietyScreen extends StatefulWidget {
   const SocietyScreen({super.key});
@@ -24,11 +36,13 @@ class SocietyScreen extends StatefulWidget {
 class _SocietyScreenState extends State<SocietyScreen> {
   bool _loading = true;
   String? _error;
+  AuthUser? _user;
   UserRole? _role;
   Society? _society;
   List<Society> _societies = [];
   SocietyJoinRequest? _myRequest;
   String? _dismissedRequestId;
+  List<SocietyBill> _recentBills = [];
 
   @override
   void initState() {
@@ -47,6 +61,7 @@ class _SocietyScreenState extends State<SocietyScreen> {
         final societies = await SocietyApi.fetchMine();
         if (!mounted) return;
         setState(() {
+          _user = user;
           _role = user.role;
           _societies = societies;
           _loading = false;
@@ -54,11 +69,17 @@ class _SocietyScreenState extends State<SocietyScreen> {
       } else {
         final society = await SocietyApi.fetchMySociety();
         final myRequest = society == null ? await SocietyApi.fetchMyJoinRequest() : null;
+        // Recent Activity on the home view is real billing history, not
+        // placeholder data — only fetch it once we know the resident has a
+        // society (and therefore a flat) to bill.
+        final recentBills = society == null ? <SocietyBill>[] : await _fetchRecentBills();
         if (!mounted) return;
         setState(() {
+          _user = user;
           _role = user.role;
           _society = society;
           _myRequest = myRequest;
+          _recentBills = recentBills;
           _loading = false;
         });
       }
@@ -140,27 +161,69 @@ class _SocietyScreenState extends State<SocietyScreen> {
 
   bool get _showAddSocietyButton => _role == UserRole.apartmentAssociation && !_loading && _error == null;
 
+  // The "join a society" empty state is the one screen with nothing else on
+  // it — no banner, no listings — so it's the one that benefits from a
+  // decorative accent instead of reading as a blank page.
+  bool get _showEmptyStateDecoration =>
+      !_loading && _error == null && _role != UserRole.apartmentAssociation && _society == null;
+
+  /// Most recent bills first (by period), capped to what the home view's
+  /// Recent Activity card shows — the full history stays one tap away on
+  /// the Billing screen.
+  Future<List<SocietyBill>> _fetchRecentBills() async {
+    final bills = await SocietyApi.fetchBills();
+    bills.sort((a, b) {
+      final byYear = b.year.compareTo(a.year);
+      return byYear != 0 ? byYear : b.month.compareTo(a.month);
+    });
+    return bills.take(3).toList();
+  }
+
+  // Society is only the landing tab for associations — tenants land on
+  // Services first (which has its own greeting), so showing "Hello, Welcome
+  // Back!" again here would be a redundant repeat for them.
+  bool get _showHomeHeader => !_loading && _error == null && _role == UserRole.apartmentAssociation;
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: RefreshIndicator(
-          onRefresh: _load,
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: 32),
-            children: [
-              const SectionHero(
-                titleStart: 'Housing Society',
-                titleHighlight: 'Management',
-                accentColor: AppColors.brand,
+        body: Stack(
+          children: [
+            // Purely-black tiles left the "join a society" empty state with
+            // nothing but a card floating on a blank page — these faint
+            // outline shapes echo the corner accents from the marketing
+            // mockup, anchored to the screen so they don't scroll with content.
+            if (_showEmptyStateDecoration) ..._EmptyStateDecoration.corners(),
+            RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 32),
+                children: [
+                  if (_showHomeHeader)
+                    HomeGreetingHeader(
+                      name: _user?.name,
+                      photoUrl: _user?.photoURL,
+                      onBellTap: _society != null
+                          ? () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocietyNoticesScreen()))
+                          : null,
+                      onAvatarTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
+                    )
+                  else
+                    const SectionHero(
+                      titleStart: 'Housing Society',
+                      titleHighlight: 'Management',
+                      accentColor: AppColors.brand,
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _buildBody(),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _buildBody(),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
         bottomNavigationBar: _showAddSocietyButton
             ? Padding(
@@ -269,7 +332,115 @@ class _SocietyScreenState extends State<SocietyScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SocietyDashboardBody(society: _society!, isAssociation: false),
+        _SocietySelectorBanner(society: _society!),
+        const SizedBox(height: 24),
+        Text('Quick Actions', style: AppFonts.heading(fontSize: 17, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.receipt_long_outlined,
+                color: AppColors.brand,
+                label: 'Pay Bills',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocietyBillingScreen())),
+              ),
+            ),
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.report_problem_outlined,
+                color: AppColors.danger,
+                label: 'Raise\nComplaint',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocietyComplaintsScreen())),
+              ),
+            ),
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.campaign_outlined,
+                color: AppColors.amber,
+                label: 'Notices',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocietyNoticesScreen())),
+              ),
+            ),
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.people_outline,
+                color: AppColors.success,
+                label: 'Directory',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocietyDirectoryScreen())),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 26),
+        Text('Explore', style: AppFonts.heading(fontSize: 17, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: _ExploreCard(
+                icon: Icons.villa_outlined,
+                title: 'Find Properties',
+                subtitle: 'Rent, PG & More',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PropertyListScreen())),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ExploreCard(
+                icon: Icons.handyman_outlined,
+                title: 'Services',
+                subtitle: 'Book & Manage',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ServicesListScreen())),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _MoreLinkRow(
+          icon: Icons.door_front_door_outlined,
+          title: 'Society Flats',
+          subtitle: 'View availability',
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocietyFlatsScreen())),
+        ),
+        const SizedBox(height: 24),
+        GradientBanner(
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocietyBillingScreen())),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle),
+                child: const Icon(Icons.verified_user_outlined, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Secure Payments', style: AppFonts.heading(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                    const SizedBox(height: 2),
+                    const Text('Safe, Fast, Reliable', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.white70),
+            ],
+          ),
+        ),
+        const SizedBox(height: 26),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Recent Activity', style: AppFonts.heading(fontSize: 17, fontWeight: FontWeight.w700)),
+            InkWell(
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocietyBillingScreen())),
+              child: const Text('View all', style: TextStyle(fontSize: 12.5, color: AppColors.brand, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _RecentActivity(bills: _recentBills),
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
@@ -282,6 +453,233 @@ class _SocietyScreenState extends State<SocietyScreen> {
       ],
     );
   }
+}
+
+/// Compact "which society am I in" identity card — the blue gradient banner
+/// from the mockup, sized down to a single row since a resident belongs to
+/// exactly one society (unlike the association's multi-society switcher).
+class _SocietySelectorBanner extends StatelessWidget {
+  final Society society;
+  const _SocietySelectorBanner({required this.society});
+
+  @override
+  Widget build(BuildContext context) {
+    return GradientBanner(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  society.name,
+                  style: AppFonts.heading(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  society.address,
+                  style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle),
+            child: const Icon(Icons.apartment, color: Colors.white, size: 22),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickAction({required this.icon, required this.color, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+              child: Icon(icon, color: color, size: 24),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.text, height: 1.2),
+        ),
+      ],
+    );
+  }
+}
+
+class _ExploreCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _ExploreCard({required this.icon, required this.title, required this.subtitle, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return DarkCard(
+      padding: const EdgeInsets.all(14),
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: AppColors.brand.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: AppColors.brand, size: 20),
+          ),
+          const SizedBox(height: 10),
+          Text(title, style: AppFonts.heading(fontSize: 13.5, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+        ],
+      ),
+    );
+  }
+}
+
+class _MoreLinkRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _MoreLinkRow({required this.icon, required this.title, required this.subtitle, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return DarkCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      onTap: onTap,
+      child: Row(
+        children: [
+          Icon(icon, size: 22, color: AppColors.brand),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppFonts.heading(fontSize: 14, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: const TextStyle(fontSize: 11.5, color: AppColors.muted)),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, size: 20, color: AppColors.muted),
+        ],
+      ),
+    );
+  }
+}
+
+/// Real billing history (most recent bills), not placeholder data — mirrors
+/// the mockup's "Maintenance Bill · Paid Successfully" activity row.
+class _RecentActivity extends StatelessWidget {
+  final List<SocietyBill> bills;
+  const _RecentActivity({required this.bills});
+
+  @override
+  Widget build(BuildContext context) {
+    if (bills.isEmpty) {
+      return const DarkCard(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(
+          child: Text('No billing activity yet.', style: TextStyle(fontSize: 12.5, color: AppColors.muted)),
+        ),
+      );
+    }
+    return Column(
+      children: bills
+          .map((b) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: DarkCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(9),
+                        decoration: BoxDecoration(
+                          color: (b.paid ? AppColors.success : AppColors.amber).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.receipt_long_outlined,
+                          size: 18,
+                          color: b.paid ? AppColors.success : AppColors.amber,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Maintenance Bill', style: AppFonts.heading(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 2),
+                            Text(b.periodLabel, style: const TextStyle(fontSize: 11.5, color: AppColors.muted)),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('₹${b.amount}', style: AppFonts.heading(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 4),
+                          PillBadge(label: b.paid ? 'Paid' : 'Due', color: b.paid ? AppColors.success : AppColors.amber),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ))
+          .toList(),
+    );
+  }
+}
+
+/// The colorful building-cluster graphic bleeding off the right edge — a
+/// black page with a single centered card otherwise reads as empty/broken
+/// rather than intentionally minimal. `IgnorePointer` so it never intercepts
+/// a tap meant for the content above.
+class _EmptyStateDecoration {
+  static List<Widget> corners() => const [
+        Positioned(
+          right: -10,
+          bottom: 0,
+          child: IgnorePointer(
+            child: Image(image: AssetImage('assets/images/city_buildings.png'), width: 200),
+          ),
+        ),
+      ];
 }
 
 class _MySocietiesGrid extends StatelessWidget {

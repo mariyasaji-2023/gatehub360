@@ -9,6 +9,7 @@ const paymentRoutes = require('./routes/payments');
 const societyRoutes = require('./routes/society');
 const propertyRoutes = require('./routes/properties');
 const hostelRoutes = require('./routes/hostels');
+const rentRoutes = require('./routes/rent');
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/society', societyRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/hostels', hostelRoutes);
+app.use('/api/my-rent', rentRoutes);
 
 process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
 

@@ -135,6 +135,12 @@ class _SocietyNoticesScreenState extends State<SocietyNoticesScreen> {
                                     Row(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(9),
+                                          decoration: BoxDecoration(color: AppColors.amber.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                                          child: const Icon(Icons.campaign_outlined, size: 18, color: AppColors.amber),
+                                        ),
+                                        const SizedBox(width: 12),
                                         Expanded(
                                           child: Text(n.title, style: AppFonts.heading(fontSize: 15, fontWeight: FontWeight.w700)),
                                         ),

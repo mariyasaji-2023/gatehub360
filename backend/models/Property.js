@@ -17,6 +17,11 @@ const propertySchema = new mongoose.Schema(
     about: { type: String, required: true, trim: true },
     contact: { type: String, required: true, trim: true },
     active: { type: Boolean, default: true },
+    // Floor names the owner has added for vacancy management (e.g. "Ground
+    // Floor", "1st Floor") - order as added, individual Units reference these
+    // by name rather than a separate Floor collection.
+    floors: { type: [String], default: [] },
+    vacancyPublishedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

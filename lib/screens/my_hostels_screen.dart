@@ -4,8 +4,10 @@ import '../services/auth_service.dart';
 import '../services/hostel_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
+import '../widgets/home_greeting_header.dart';
 import '../widgets/section_hero.dart';
 import 'hostel_enquiries_screen.dart';
+import 'profile_screen.dart';
 
 const _hostelTypes = ['PG', 'Hostel', 'Service Apt', 'Flat'];
 const _hostelGenders = ['Men', 'Women', 'Co-ed'];
@@ -19,6 +21,7 @@ class MyHostelsScreen extends StatefulWidget {
 
 class _MyHostelsScreenState extends State<MyHostelsScreen> {
   List<MyHostelListing> _listings = [];
+  AuthUser? _user;
   int _unreadTotal = 0;
   bool _loading = true;
   String? _error;
@@ -35,10 +38,12 @@ class _MyHostelsScreenState extends State<MyHostelsScreen> {
       _error = null;
     });
     try {
+      final user = await AuthService.syncCurrentUser();
       final listings = await HostelApi.fetchMine();
       final unreadTotal = await HostelApi.fetchUnreadEnquiryCount();
       if (!mounted) return;
       setState(() {
+        _user = user;
         _listings = listings;
         _unreadTotal = unreadTotal;
         _loading = false;
@@ -160,6 +165,12 @@ class _MyHostelsScreenState extends State<MyHostelsScreen> {
           child: ListView(
             padding: const EdgeInsets.only(bottom: 100),
             children: [
+              HomeGreetingHeader(
+                name: _user?.name,
+                photoUrl: _user?.photoURL,
+                onBellTap: null,
+                onAvatarTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
+              ),
               SectionHero(
                 titleStart: 'My',
                 titleHighlight: 'PG & Hostels',

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../data/listings_data.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
+import '../widgets/home_greeting_header.dart';
 import '../widgets/section_hero.dart';
+import 'profile_screen.dart';
 import 'service_detail_screen.dart';
 
 const _serviceIcons = {
@@ -28,6 +31,23 @@ class ServicesListScreen extends StatefulWidget {
 class _ServicesListScreenState extends State<ServicesListScreen> {
   final _searchController = TextEditingController();
   String _search = '';
+  AuthUser? _user;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUser();
+  }
+
+  Future<void> _loadUser() async {
+    try {
+      final user = await AuthService.syncCurrentUser();
+      if (!mounted) return;
+      setState(() => _user = user);
+    } catch (_) {
+      // Greeting just falls back to a nameless "Hello," — not worth an error state.
+    }
+  }
 
   @override
   void dispose() {
@@ -44,6 +64,12 @@ class _ServicesListScreenState extends State<ServicesListScreen> {
       child: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
+          HomeGreetingHeader(
+            name: _user?.name,
+            photoUrl: _user?.photoURL,
+            onBellTap: null,
+            onAvatarTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
+          ),
           const SectionHero(
             titleStart: 'Home',
             titleHighlight: 'Services',

@@ -4,7 +4,7 @@ import '../services/auth_service.dart';
 import '../services/firebase_auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
-import '../widgets/pill_badge.dart';
+import '../widgets/gradient_banner.dart';
 import 'login_screen.dart';
 import 'my_bookings_screen.dart';
 import 'role_selection_screen.dart';
@@ -90,29 +90,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
             : ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
-                  Center(
-                    child: CircleAvatar(
-                      radius: 44,
-                      backgroundColor: AppColors.surfaceAlt,
-                      backgroundImage: photoURL != null ? NetworkImage(photoURL) : null,
-                      child: photoURL == null
-                          ? const Icon(Icons.person, size: 44, color: AppColors.muted)
-                          : null,
+                  GradientBanner(
+                    padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: const BoxDecoration(shape: BoxShape.circle, border: Border.fromBorderSide(BorderSide(color: Colors.white38, width: 2))),
+                          child: CircleAvatar(
+                            radius: 42,
+                            backgroundColor: Colors.white24,
+                            backgroundImage: photoURL != null ? NetworkImage(photoURL) : null,
+                            child: photoURL == null ? const Icon(Icons.person, size: 42, color: Colors.white) : null,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          (name == null || name.isEmpty) ? 'GateHub360 User' : name,
+                          textAlign: TextAlign.center,
+                          style: AppFonts.heading(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
+                        ),
+                        if (email != null) ...[
+                          const SizedBox(height: 4),
+                          Text(email, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                        ],
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(20)),
+                          child: Text(
+                            _roleLabel(_user?.role, _user?.serviceType),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    (name == null || name.isEmpty) ? 'GateHub360 User' : name,
-                    textAlign: TextAlign.center,
-                    style: AppFonts.heading(fontSize: 20, fontWeight: FontWeight.w800),
-                  ),
-                  if (email != null) ...[
-                    const SizedBox(height: 4),
-                    Text(email, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13.5, color: AppColors.muted)),
-                  ],
-                  const SizedBox(height: 12),
-                  Center(child: PillBadge(label: _roleLabel(_user?.role, _user?.serviceType), color: AppColors.brand)),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
                   DarkCard(
                     padding: EdgeInsets.zero,
                     child: Column(

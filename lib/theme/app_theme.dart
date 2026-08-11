@@ -1,23 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class AppColors {
+  // True black everywhere (OLED-friendly) — page, cards, tiles, and input
+  // fields all share the same pure black. With no color/brightness
+  // difference left to separate a box from the page behind it, definition
+  // comes entirely from `border` — keep that one clearly visible.
   static const bg = Color(0xFF000000);
-  static const card = Color(0xFF141414);
-  static const surfaceAlt = Color(0xFF1F1F1F);
-  static const border = Color(0xFF2B2B2B);
-  static const muted = Color(0xFF9CA3AF);
-  static const text = Color(0xFFFFFFFF);
+  static const card = Color(0xFF000000);
+  static const surfaceAlt = Color(0xFF000000);
+  static const border = Color(0xFF33415F);
+  static const muted = Color(0xFF8892AD);
+  static const text = Color(0xFFEEF2FC);
 
   // Brand blue (matches the logo's accent color) — the single accent used everywhere:
   // prices, CTAs, checkmarks, section identity, and all "Explore" links.
-  static const brand = Color(0xFF1D82EA);
-  static const brandLight = Color(0xFF6FB2F5);
+  // Brightened slightly from the light-theme value so it still pops on a dark page.
+  static const brand = Color(0xFF4C9CFF);
+  static const brandLight = Color(0xFF8CC4FF);
+  static const brandDeep = Color(0xFF0F2E7A);
+  // Text/icon color placed on top of the brand-blue surface (buttons, gradient
+  // banners) — stays white regardless of the app's own light/dark background.
   static const brandOnDark = Color(0xFFFFFFFF);
 
   // Semantic status colors — not tied to brand identity.
-  static const amber = Color(0xFFF59E0B);
-  static const danger = Color(0xFFEF4444);
-  static const success = Color(0xFF22C55E);
+  static const amber = Color(0xFFF5A623);
+  static const danger = Color(0xFFFF6B6B);
+  static const success = Color(0xFF3DD68C);
+
+  // Elevation shadow for cards resting on the dark background — a plain black
+  // falloff instead of the light theme's navy-tinted one, since a colored
+  // shadow barely reads against a background this dark.
+  static const shadow = Color(0x59000000);
 }
 
 class AppFonts {
@@ -54,6 +68,9 @@ class AppTheme {
         elevation: 0,
         centerTitle: false,
         titleTextStyle: AppFonts.heading(fontSize: 18, fontWeight: FontWeight.w700),
+        // Light status-bar icons (clock, battery, wifi) so they stay legible
+        // against the dark app bar/background.
+        systemOverlayStyle: SystemUiOverlayStyle.light,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/society.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
+import '../widgets/gradient_banner.dart';
 import 'society_billing_screen.dart';
 import 'society_complaints_screen.dart';
 import 'society_directory_screen.dart';
@@ -45,29 +46,32 @@ class SocietyDashboardBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DarkCard(
+        GradientBanner(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(society.name, style: AppFonts.heading(fontSize: 18, fontWeight: FontWeight.w700)),
+              Text(society.name, style: AppFonts.heading(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
               const SizedBox(height: 4),
-              Text(society.address, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+              Text(society.address, style: const TextStyle(fontSize: 12.5, color: Colors.white70)),
               const SizedBox(height: 2),
               Text(
                 '${society.area}, ${society.city}, ${society.state} - ${society.pincode}',
-                style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+                style: const TextStyle(fontSize: 12.5, color: Colors.white70),
               ),
               if (isAssociation) ...[
-                const Padding(padding: EdgeInsets.symmetric(vertical: 14), child: Divider(height: 1)),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  child: Divider(height: 1, color: Colors.white24),
+                ),
                 Row(
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Invite code', style: TextStyle(fontSize: 11.5, color: AppColors.muted)),
+                          const Text('Invite code', style: TextStyle(fontSize: 11.5, color: Colors.white70)),
                           const SizedBox(height: 4),
-                          Text(society.code, style: AppFonts.heading(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.brand)),
+                          Text(society.code, style: AppFonts.heading(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
                         ],
                       ),
                     ),
@@ -76,9 +80,9 @@ class SocietyDashboardBody extends StatelessWidget {
                         Clipboard.setData(ClipboardData(text: society.code));
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invite code copied')));
                       },
-                      icon: const Icon(Icons.copy, size: 16, color: AppColors.brand),
-                      label: const Text('Copy', style: TextStyle(color: AppColors.brand)),
-                      style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.brand), minimumSize: const Size(0, 40)),
+                      icon: const Icon(Icons.copy, size: 16, color: Colors.white),
+                      label: const Text('Copy', style: TextStyle(color: Colors.white)),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white54), minimumSize: const Size(0, 40)),
                     ),
                   ],
                 ),

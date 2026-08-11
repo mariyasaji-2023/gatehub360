@@ -4,8 +4,7 @@ import '../services/auth_service.dart';
 import '../services/property_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
-import '../widgets/section_hero.dart';
-import 'property_enquiries_screen.dart';
+import 'property_dashboard_screen.dart';
 
 const _propertyTypes = ['Apartment', 'Villa', 'Plot', 'Commercial'];
 const _propertyModes = ['Buy', 'Rent', 'Sell', 'Commercial'];
@@ -20,7 +19,6 @@ class MyPropertiesScreen extends StatefulWidget {
 
 class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
   List<MyPropertyListing> _listings = [];
-  int _unreadTotal = 0;
   bool _loading = true;
   String? _error;
 
@@ -37,11 +35,9 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
     });
     try {
       final listings = await PropertyApi.fetchMine();
-      final unreadTotal = await PropertyApi.fetchUnreadEnquiryCount();
       if (!mounted) return;
       setState(() {
         _listings = listings;
-        _unreadTotal = unreadTotal;
         _loading = false;
       });
     } on ApiException catch (e) {
@@ -53,11 +49,10 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
     }
   }
 
-  Future<void> _openEnquiries({String? propertyId, String? propertyTitle}) async {
+  Future<void> _openProperty(MyPropertyListing listing) async {
     await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => PropertyEnquiriesScreen(propertyId: propertyId, propertyTitle: propertyTitle),
+      builder: (_) => PropertyDashboardScreen(listing: listing),
     ));
-    if (mounted) _load();
   }
 
   Future<void> _openForm({MyPropertyListing? existing}) async {
@@ -135,27 +130,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('My Properties'),
-          actions: [
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                IconButton(
-                  tooltip: 'Enquiries',
-                  icon: const Icon(Icons.mail_outline),
-                  onPressed: () => _openEnquiries(),
-                ),
-                if (_unreadTotal > 0)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: _UnreadBadge(count: _unreadTotal),
-                  ),
-              ],
-            ),
-          ],
-        ),
+        appBar: AppBar(title: const Text('My Properties')),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _openForm(),
           icon: const Icon(Icons.add),
@@ -165,165 +140,118 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
         body: RefreshIndicator(
           onRefresh: _load,
           child: ListView(
-            padding: const EdgeInsets.only(bottom: 100),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
             children: [
-              SectionHero(
-                titleStart: 'My',
-                titleHighlight: 'Properties',
-                accentColor: AppColors.brand,
-                child: const Text(
-                  'Manage what buyers and tenants see when they browse.',
-                  style: TextStyle(fontSize: 13, color: AppColors.muted),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_loading)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 60),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (_error != null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 40),
-                        child: Center(
-                          child: Column(
-                            children: [
-                              Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13.5, color: AppColors.muted)),
-                              const SizedBox(height: 12),
-                              OutlinedButton(onPressed: _load, child: const Text('Retry')),
-                            ],
-                          ),
-                        ),
-                      )
-                    else ...[
-                      Text('Your Listings (${_listings.length})', style: AppFonts.heading(fontSize: 18, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 16),
-                      if (_listings.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 40),
-                          child: Center(
-                            child: Text(
-                              "You haven't added any properties yet.\nTap \"Add Property\" to get started.",
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 13.5, color: AppColors.muted, height: 1.6),
-                            ),
-                          ),
-                        ),
-                      ..._listings.map((l) => Padding(
-                            padding: const EdgeInsets.only(bottom: 14),
-                            child: DarkCard(
-                              onTap: () => _openEnquiries(propertyId: l.id, propertyTitle: l.title),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 60),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13.5, color: AppColors.muted)),
+                        const SizedBox(height: 12),
+                        OutlinedButton(onPressed: _load, child: const Text('Retry')),
+                      ],
+                    ),
+                  ),
+                )
+              else ...[
+                Text('Your Listings (${_listings.length})', style: AppFonts.heading(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 16),
+                if (_listings.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    child: Center(
+                      child: Text(
+                        "You haven't added any properties yet.\nTap \"Add Property\" to get started.",
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 13.5, color: AppColors.muted, height: 1.6),
+                      ),
+                    ),
+                  ),
+                ..._listings.map((l) => Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: DarkCard(
+                        onTap: () => _openProperty(l),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(l.emoji, style: const TextStyle(fontSize: 30)),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Stack(
-                                        clipBehavior: Clip.none,
-                                        children: [
-                                          Text(l.emoji, style: const TextStyle(fontSize: 30)),
-                                          if (l.unreadEnquiries > 0)
-                                            Positioned(
-                                              top: -4,
-                                              right: -6,
-                                              child: _UnreadBadge(count: l.unreadEnquiries),
-                                            ),
-                                        ],
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(l.title, style: AppFonts.heading(fontSize: 15.5, fontWeight: FontWeight.w700)),
-                                            const SizedBox(height: 3),
-                                            Text('📍 ${l.location}', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-                                            const SizedBox(height: 3),
-                                            Text('₹${l.price} · ${l.type} · ${l.mode}', style: const TextStyle(fontSize: 13, color: AppColors.brand, fontWeight: FontWeight.w700)),
-                                          ],
-                                        ),
-                                      ),
-                                      PopupMenuButton<String>(
-                                        onSelected: (v) {
-                                          if (v == 'edit') _openForm(existing: l);
-                                          if (v == 'delete') _confirmDelete(l);
-                                        },
-                                        itemBuilder: (_) => const [
-                                          PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                          PopupMenuItem(value: 'delete', child: Text('Delete')),
-                                        ],
-                                      ),
+                                      Text(l.title, style: AppFonts.heading(fontSize: 15.5, fontWeight: FontWeight.w700)),
+                                      const SizedBox(height: 3),
+                                      Text('📍 ${l.location}', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                                      const SizedBox(height: 3),
+                                      Text('₹${l.price} · ${l.type} · ${l.mode}', style: const TextStyle(fontSize: 13, color: AppColors.brand, fontWeight: FontWeight.w700)),
                                     ],
                                   ),
-                                  const SizedBox(height: 10),
-                                  Text(l.about, style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.5)),
-                                  const SizedBox(height: 10),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      if (l.bhk != 'N/A')
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(color: AppColors.surfaceAlt, borderRadius: BorderRadius.circular(6)),
-                                          child: Text(l.bhk, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
-                                        ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(color: AppColors.surfaceAlt, borderRadius: BorderRadius.circular(6)),
-                                        child: Text('${l.sqft} sqft', style: const TextStyle(fontSize: 11, color: AppColors.muted)),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: (l.active ? AppColors.brand : AppColors.muted).withValues(alpha: 0.12),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          l.active ? 'Visible to buyers/tenants' : 'Hidden',
-                                          style: TextStyle(
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: l.active ? AppColors.brand : AppColors.muted,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                                ),
+                                PopupMenuButton<String>(
+                                  onSelected: (v) {
+                                    if (v == 'edit') _openForm(existing: l);
+                                    if (v == 'delete') _confirmDelete(l);
+                                  },
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                                  ],
+                                ),
+                              ],
                             ),
-                          )),
-                    ],
-                  ],
-                ),
-              ),
+                            const SizedBox(height: 10),
+                            Text(l.about, style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.5)),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                if (l.bhk != 'N/A')
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(color: AppColors.surfaceAlt, borderRadius: BorderRadius.circular(6)),
+                                    child: Text(l.bhk, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                                  ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(color: AppColors.surfaceAlt, borderRadius: BorderRadius.circular(6)),
+                                  child: Text('${l.sqft} sqft', style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: (l.active ? AppColors.brand : AppColors.muted).withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    l.active ? 'Visible to buyers/tenants' : 'Hidden',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: l.active ? AppColors.brand : AppColors.muted,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    )),
+              ],
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _UnreadBadge extends StatelessWidget {
-  final int count;
-  const _UnreadBadge({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-      constraints: const BoxConstraints(minWidth: 16),
-      decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(8)),
-      child: Text(
-        count > 9 ? '9+' : '$count',
-        textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700),
       ),
     );
   }

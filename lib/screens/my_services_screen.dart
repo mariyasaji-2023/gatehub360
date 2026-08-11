@@ -5,7 +5,9 @@ import '../services/auth_service.dart';
 import '../services/services_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
+import '../widgets/home_greeting_header.dart';
 import '../widgets/section_hero.dart';
+import 'profile_screen.dart';
 
 class MyServicesScreen extends StatefulWidget {
   const MyServicesScreen({super.key});
@@ -16,6 +18,7 @@ class MyServicesScreen extends StatefulWidget {
 
 class _MyServicesScreenState extends State<MyServicesScreen> {
   List<MyServiceListing> _listings = [];
+  AuthUser? _user;
   bool _loading = true;
   String? _error;
 
@@ -31,9 +34,11 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
       _error = null;
     });
     try {
+      final user = await AuthService.syncCurrentUser();
       final listings = await ServicesApi.fetchMine();
       if (!mounted) return;
       setState(() {
+        _user = user;
         _listings = listings;
         _loading = false;
       });
@@ -110,6 +115,12 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           child: ListView(
             padding: const EdgeInsets.only(bottom: 100),
             children: [
+              HomeGreetingHeader(
+                name: _user?.name,
+                photoUrl: _user?.photoURL,
+                onBellTap: null,
+                onAvatarTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
+              ),
               SectionHero(
                 titleStart: 'My',
                 titleHighlight: 'Services',

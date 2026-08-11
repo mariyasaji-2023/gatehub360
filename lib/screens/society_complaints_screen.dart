@@ -7,6 +7,16 @@ import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
 import '../widgets/pill_badge.dart';
 
+const _categoryIcons = {
+  ComplaintCategory.plumbing: Icons.plumbing_outlined,
+  ComplaintCategory.electrical: Icons.electrical_services_outlined,
+  ComplaintCategory.cleaning: Icons.cleaning_services_outlined,
+  ComplaintCategory.security: Icons.security_outlined,
+  ComplaintCategory.parking: Icons.local_parking_outlined,
+  ComplaintCategory.noise: Icons.volume_up_outlined,
+  ComplaintCategory.other: Icons.report_problem_outlined,
+};
+
 class SocietyComplaintsScreen extends StatefulWidget {
   const SocietyComplaintsScreen({super.key});
 
@@ -137,6 +147,12 @@ class _SocietyComplaintsScreenState extends State<SocietyComplaintsScreen> {
                                     Row(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(9),
+                                          decoration: BoxDecoration(color: _statusColor(c.status).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                                          child: Icon(_categoryIcons[c.category] ?? Icons.report_problem_outlined, size: 18, color: _statusColor(c.status)),
+                                        ),
+                                        const SizedBox(width: 12),
                                         Expanded(
                                           child: Text(c.title, style: AppFonts.heading(fontSize: 15, fontWeight: FontWeight.w700)),
                                         ),
