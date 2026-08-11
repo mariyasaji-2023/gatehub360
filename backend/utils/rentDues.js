@@ -1,22 +1,35 @@
-// Every calendar month from a tenant's move-in month through the current
-// month, minus whichever ones already have a paid RentPayment record. This
-// is the single source of truth for "pending rent" / "due date tracking" -
-// there's no separate generation step, a month is simply due until paid.
+// Adds `n` months to `date`, clamped to the last day of the target month
+// (e.g. Jan 31 + 1 month -> Feb 28/29, not an overflowed Mar 3).
+function addMonthsClamped(date, n) {
+  const day = date.getDate();
+  const result = new Date(date.getFullYear(), date.getMonth() + n, 1);
+  const daysInMonth = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(day, daysInMonth));
+  return result;
+}
+
+// Every monthly cycle anchored on the tenant's move-in day (move-in + 1
+// month, +2 months, ...) that has come due as of today, minus whichever
+// ones already have a paid RentPayment record. A tenant owes nothing until
+// a full month of tenancy has passed - this is the single source of truth
+// for "pending rent" / "due date tracking" - there's no separate generation
+// step, a cycle is simply due until paid.
 function dueMonths(moveInDate, paidPairs) {
   const paid = new Set(paidPairs.map(({ month, year }) => `${year}-${month}`));
   const months = [];
 
-  const cursor = new Date(moveInDate.getFullYear(), moveInDate.getMonth(), 1);
   const now = new Date();
-  const end = new Date(now.getFullYear(), now.getMonth(), 1);
+  let cycle = 1;
+  let dueDate = addMonthsClamped(moveInDate, cycle);
 
-  while (cursor <= end) {
-    const month = cursor.getMonth() + 1;
-    const year = cursor.getFullYear();
+  while (dueDate <= now) {
+    const month = dueDate.getMonth() + 1;
+    const year = dueDate.getFullYear();
     if (!paid.has(`${year}-${month}`)) {
       months.push({ month, year });
     }
-    cursor.setMonth(cursor.getMonth() + 1);
+    cycle += 1;
+    dueDate = addMonthsClamped(moveInDate, cycle);
   }
   return months;
 }
