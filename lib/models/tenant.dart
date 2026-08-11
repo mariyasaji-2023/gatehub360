@@ -24,6 +24,21 @@ class Tenant {
   final int? pendingMonths;
   final num? pendingAmount;
 
+  // --- Stay details - all optional, filled in on the "Stay Details" tab
+  // of AddTenantScreen (see backend/models/Tenant.js) ---
+  final String? altPhone;
+  final String stayType; // 'long' | 'short'
+  final int? lockInMonths;
+  final int? noticePeriodDays;
+  final int? agreementPeriodMonths;
+  final String rentalFrequency; // only 'monthly' is supported today
+  final int? rentDueDay;
+  final num? securityDeposit;
+  final String? referredBy;
+  final String? remarks;
+  final String? tenantType;
+  final String? otherDetails;
+
   const Tenant({
     required this.id,
     required this.name,
@@ -38,6 +53,18 @@ class Tenant {
     this.isLinked,
     this.pendingMonths,
     this.pendingAmount,
+    this.altPhone,
+    this.stayType = 'long',
+    this.lockInMonths,
+    this.noticePeriodDays,
+    this.agreementPeriodMonths,
+    this.rentalFrequency = 'monthly',
+    this.rentDueDay,
+    this.securityDeposit,
+    this.referredBy,
+    this.remarks,
+    this.tenantType,
+    this.otherDetails,
   });
 
   bool get isFullyPaid => (pendingMonths ?? 0) == 0;
@@ -56,5 +83,17 @@ class Tenant {
         isLinked: json.containsKey('linkedUser') ? json['linkedUser'] != null : null,
         pendingMonths: json['pendingMonths'] as int?,
         pendingAmount: json['pendingAmount'] as num?,
+        altPhone: json['altPhone'] as String?,
+        stayType: json['stayType'] as String? ?? 'long',
+        lockInMonths: json['lockInMonths'] as int?,
+        noticePeriodDays: json['noticePeriodDays'] as int?,
+        agreementPeriodMonths: json['agreementPeriodMonths'] as int?,
+        rentalFrequency: json['rentalFrequency'] as String? ?? 'monthly',
+        rentDueDay: json['rentDueDay'] as int?,
+        securityDeposit: json['securityDeposit'] as num?,
+        referredBy: json['referredBy'] as String?,
+        remarks: json['remarks'] as String?,
+        tenantType: json['tenantType'] as String?,
+        otherDetails: json['otherDetails'] as String?,
       );
 }

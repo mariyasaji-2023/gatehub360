@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/property_announcement.dart';
 import '../models/rent_payment.dart';
 import 'api_config.dart';
 import 'auth_service.dart';
@@ -30,6 +31,16 @@ class RentApi {
       if (propertyId != null) 'propertyId': propertyId,
     });
     return _decode(response)['propertyTitle'] as String?;
+  }
+
+  /// Announcements posted by owners for properties this tenant has actually
+  /// joined (linked their account to via join code) - a property they
+  /// haven't joined never shows up here, same as it's excluded from
+  /// [fetchMyRentals].
+  static Future<List<PropertyAnnouncement>> fetchMyAnnouncements() async {
+    final response = await _get('/my-rent/announcements');
+    final announcements = _decode(response)['announcements'] as List;
+    return announcements.map((j) => PropertyAnnouncement.fromJson(j as Map<String, dynamic>)).toList();
   }
 
   /// Records a rent payment already completed + signature-verified via

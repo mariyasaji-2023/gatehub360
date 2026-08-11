@@ -11,6 +11,8 @@ import '../widgets/stat_overview_bar.dart';
 import 'add_rooms_screen.dart';
 import 'add_tenant_screen.dart';
 import 'collect_payment_screen.dart';
+import 'property_announcements_screen.dart';
+import 'property_invite_screen.dart';
 import 'property_units_screen.dart';
 import 'tenants_screen.dart';
 
@@ -85,7 +87,7 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
 
   Future<void> _openAddTenant() async {
     final tenant = await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => AddTenantScreen(propertyId: widget.listing.id)),
+      MaterialPageRoute(builder: (_) => AddTenantScreen(propertyId: widget.listing.id, propertyTitle: widget.listing.title)),
     );
     if (tenant == null || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tenant.name} added as a tenant')));
@@ -97,6 +99,18 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
   Future<void> _openTenants() async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => TenantsScreen(propertyId: widget.listing.id)),
+    );
+  }
+
+  Future<void> _openAnnouncements() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PropertyAnnouncementsScreen(propertyId: widget.listing.id)),
+    );
+  }
+
+  Future<void> _openInviteTenant() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PropertyInviteScreen(propertyId: widget.listing.id, propertyTitle: widget.listing.title)),
     );
   }
 
@@ -138,10 +152,11 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
   // is built. More actions to come.
   List<QuickAction> get _quickActions => [
         QuickAction(icon: Icons.person_add_alt_outlined, label: 'Add Tenant', onTap: _openAddTenant),
+        QuickAction(icon: Icons.qr_code_2_outlined, label: 'Invite Tenant', onTap: _openInviteTenant),
         QuickAction(icon: Icons.groups_outlined, label: 'Tenants', onTap: _openTenants),
-        const QuickAction(icon: Icons.add_comment_outlined, label: 'Add Complaint'),
+        const QuickAction(icon: Icons.report_problem_outlined, label: 'View Complaints'),
         QuickAction(icon: Icons.request_page_outlined, label: 'Collect Payment', onTap: _openCollectPayment),
-        const QuickAction(icon: Icons.campaign_outlined, label: 'Send Announcement'),
+        QuickAction(icon: Icons.campaign_outlined, label: 'Send Announcement', onTap: _openAnnouncements),
         const QuickAction(icon: Icons.trending_down_outlined, label: 'Add Expense'),
         const QuickAction(icon: Icons.request_quote_outlined, label: 'Add Dues'),
       ];

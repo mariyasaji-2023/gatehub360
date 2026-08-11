@@ -3,6 +3,7 @@ const requireAuth = require('../middleware/auth');
 const Tenant = require('../models/Tenant');
 const RentPayment = require('../models/RentPayment');
 const Property = require('../models/Property');
+const Announcement = require('../models/Announcement');
 const { dueMonths } = require('../utils/rentDues');
 
 const router = express.Router();
@@ -35,6 +36,19 @@ router.get('/', requireAuth, async (req, res) => {
     })
   );
   res.json({ rentals: results });
+});
+
+// Announcements posted by owners for properties this tenant has actually
+// joined (linked their account to via join code) - the same authorization
+// boundary as findMyTenantRecords, so a tenant never sees announcements for
+// a property they haven't linked to.
+router.get('/announcements', requireAuth, async (req, res) => {
+  const tenants = await findMyTenantRecords(req);
+  const propertyIds = tenants.map((t) => t.property._id);
+  const announcements = await Announcement.find({ property: { $in: propertyIds } })
+    .populate('property', 'title')
+    .sort({ createdAt: -1 });
+  res.json({ announcements });
 });
 
 // Tenant enters the code shown on the owner's tenant list to link their

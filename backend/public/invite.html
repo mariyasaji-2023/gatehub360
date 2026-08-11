@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Join Request — GateHub360</title>
+<style>
+  :root { --brand: #2f6fed; --text: #1a1a1a; --muted: #6b7280; --border: #e3e6ec; --bg: #f4f6fb; --danger: #d64545; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 28px 20px 60px; }
+  .avatar { width: 84px; height: 84px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 38px;
+            display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; }
+  .card { background: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 8px 24px rgba(20, 30, 60, 0.06); }
+  h1 { font-size: 1.3em; margin: 0 0 6px; text-align: center; }
+  .sub { text-align: center; color: var(--muted); font-size: 0.92em; margin: 0 0 18px; }
+  .property { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg); border-radius: 12px; }
+  .property .emoji { font-size: 28px; width: 44px; height: 44px; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .property .name { font-weight: 700; font-size: 1.02em; }
+  .property .loc { color: var(--muted); font-size: 0.85em; margin-top: 2px; }
+  form { margin-top: 20px; }
+  label { display: block; font-size: 0.82em; color: var(--muted); margin: 16px 0 6px; }
+  input, select { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 0.95em; background: #fff; color: var(--text); }
+  input:focus, select:focus { outline: none; border-color: var(--brand); }
+  .phone-row { display: flex; gap: 8px; }
+  .phone-row .prefix { width: 66px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+                        border: 1px solid var(--border); border-radius: 10px; background: var(--bg); font-size: 0.9em; }
+  button { width: 100%; margin-top: 26px; padding: 14px; border-radius: 10px; border: none; background: var(--brand);
+           color: #fff; font-size: 1em; font-weight: 700; cursor: pointer; }
+  button:disabled { opacity: 0.6; cursor: default; }
+  .error { color: var(--danger); font-size: 0.85em; margin-top: 10px; display: none; }
+  .footer { text-align: center; color: var(--muted); font-size: 0.8em; margin-top: 20px; }
+  .state { text-align: center; padding: 40px 10px; }
+  .state .big { font-size: 44px; margin-bottom: 14px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="avatar">🔑</div>
+
+  <div id="loadingState" class="card state">
+    <p>Loading…</p>
+  </div>
+
+  <div id="errorState" class="card state hidden">
+    <div class="big">😕</div>
+    <p id="errorText">This invite link doesn't look right.</p>
+  </div>
+
+  <div id="successState" class="card state hidden">
+    <div class="big">✅</div>
+    <h1>Request sent!</h1>
+    <p class="sub">The property owner has been notified. Once they approve it, they'll share a code with you to link your account in the GateHub360 app.</p>
+  </div>
+
+  <div id="formState" class="card hidden">
+    <h1>Hey <b>Tenant!</b></h1>
+    <p class="sub">Please fill in your details to send your joining request</p>
+
+    <div class="property">
+      <div class="emoji" id="propertyEmoji">🏠</div>
+      <div>
+        <div class="name" id="propertyName">—</div>
+        <div class="loc" id="propertyLocation"></div>
+      </div>
+    </div>
+
+    <form id="requestForm">
+      <label>Your Name</label>
+      <input id="name" required placeholder="Enter your name">
+
+      <label>Contact Number</label>
+      <div class="phone-row">
+        <div class="prefix">🇮🇳 +91</div>
+        <input id="phone" required inputmode="numeric" maxlength="10" placeholder="10-digit mobile number">
+      </div>
+
+      <label>Alternate Contact (optional)</label>
+      <div class="phone-row">
+        <div class="prefix">🇮🇳 +91</div>
+        <input id="altPhone" inputmode="numeric" maxlength="10" placeholder="Alternate contact">
+      </div>
+
+      <label>Room / Flat (optional)</label>
+      <select id="roomSelect" class="hidden"></select>
+      <input id="roomText" placeholder="Room number, if you know it">
+
+      <label>Rent Amount (optional)</label>
+      <input id="rent" type="number" min="0" placeholder="₹ per month">
+
+      <label>Security Deposit (optional)</label>
+      <input id="deposit" type="number" min="0" placeholder="₹ amount">
+
+      <label>Joining Date (optional)</label>
+      <input id="moveIn" type="date">
+
+      <p class="error" id="formError"></p>
+      <button type="submit" id="submitBtn">Submit</button>
+    </form>
+  </div>
+
+  <p class="footer">GateHub360</p>
+</div>
+
+<script>
+  const API_BASE = 'https://gatehub-api.hub360.pro/api';
+  const params = new URLSearchParams(location.search);
+  const propertyId = params.get('id');
+
+  const show = (id) => {
+    for (const s of ['loadingState', 'errorState', 'successState', 'formState']) {
+      document.getElementById(s).classList.toggle('hidden', s !== id);
+    }
+  };
+
+  async function init() {
+    if (!propertyId) {
+      document.getElementById('errorText').textContent = 'This invite link is missing a property id.';
+      show('errorState');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/properties/${propertyId}/public`);
+      if (!res.ok) throw new Error();
+      const { property } = await res.json();
+      document.getElementById('propertyName').textContent = property.title;
+      document.getElementById('propertyLocation').textContent = property.location || '';
+      document.getElementById('propertyEmoji').textContent =
+        { Apartment: '🏢', Villa: '🏡', Plot: '🌳', Commercial: '🏬' }[property.type] || '🏠';
+      show('formState');
+      loadRooms();
+    } catch (e) {
+      document.getElementById('errorText').textContent = "This invite link doesn't look right — the property couldn't be found.";
+      show('errorState');
+    }
+  }
+
+  async function loadRooms() {
+    try {
+      const res = await fetch(`${API_BASE}/properties/${propertyId}/units/public`);
+      if (!res.ok) return;
+      const { units } = await res.json();
+      if (!units || units.length === 0) return;
+      const select = document.getElementById('roomSelect');
+      const textInput = document.getElementById('roomText');
+      select.innerHTML = '<option value="">Choose your room</option>' +
+        units.map(u => `<option value="${u.label}">${u.label} (${u.floor})</option>`).join('');
+      select.classList.remove('hidden');
+      textInput.classList.add('hidden');
+    } catch (e) {
+      // Fine to fail quietly - the free-text room field already covers it.
+    }
+  }
+
+  document.getElementById('requestForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById('formError');
+    errorEl.style.display = 'none';
+
+    const name = document.getElementById('name').value.trim();
+    const phoneDigits = document.getElementById('phone').value.trim();
+    if (!name || phoneDigits.length < 10) {
+      errorEl.textContent = 'Enter your name and a valid 10-digit number.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    const altDigits = document.getElementById('altPhone').value.trim();
+    const roomSelect = document.getElementById('roomSelect');
+    const room = !roomSelect.classList.contains('hidden') ? roomSelect.value : document.getElementById('roomText').value.trim();
+    const rent = document.getElementById('rent').value;
+    const deposit = document.getElementById('deposit').value;
+    const moveIn = document.getElementById('moveIn').value;
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    try {
+      const res = await fetch(`${API_BASE}/properties/${propertyId}/join-requests-public`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          phone: '+91' + phoneDigits,
+          altPhone: altDigits ? '+91' + altDigits : undefined,
+          roomNumber: room || undefined,
+          monthlyRent: rent ? Number(rent) : undefined,
+          securityDeposit: deposit ? Number(deposit) : undefined,
+          moveInDate: moveIn || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      show('successState');
+    } catch (e) {
+      errorEl.textContent = "Couldn't send your request — please try again.";
+      errorEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Submit';
+    }
+  });
+
+  init();
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
 import '../widgets/pill_badge.dart';
 import '../widgets/razorpay_payment_sheet.dart';
+import 'my_announcements_screen.dart';
 
 /// Tenant-facing rent screen — shows every property this signed-in user has
 /// linked to their account by entering an owner-shared join code, what's
@@ -132,6 +133,13 @@ class _MyRentScreenState extends State<MyRentScreen> {
       appBar: AppBar(
         title: const Text('My Rent'),
         actions: [
+          IconButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MyAnnouncementsScreen()),
+            ),
+            icon: const Icon(Icons.campaign_outlined),
+            tooltip: 'Announcements',
+          ),
           IconButton(
             onPressed: _joining ? null : _showJoinDialog,
             icon: _joining

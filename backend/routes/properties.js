@@ -6,10 +6,29 @@ const User = require('../models/User');
 const Tenant = require('../models/Tenant');
 const RentPayment = require('../models/RentPayment');
 const Unit = require('../models/Unit');
+const Announcement = require('../models/Announcement');
+const PropertyJoinRequest = require('../models/PropertyJoinRequest');
 const { notifyOwner } = require('../utils/pushNotify');
 const { dueMonths, isCurrentMonth } = require('../utils/rentDues');
 
 const router = express.Router();
+
+// Shared by POST /:id/tenants and the join-request approval route below -
+// both end up creating the same kind of Tenant record. joinCode collisions
+// are rare (6 chars, 32-char alphabet) but the unique index can still
+// reject one - regenerate and retry rather than fail the whole request.
+async function createTenantRecord(tenantData) {
+  let tenant;
+  for (let attempt = 0; attempt < 5 && !tenant; attempt += 1) {
+    try {
+      tenant = await Tenant.create(tenantData);
+    } catch (err) {
+      if (err.code === 11000 && attempt < 4) continue;
+      throw err;
+    }
+  }
+  return tenant;
+}
 
 router.get('/', requireAuth, async (req, res) => {
   const filter = { active: true };
@@ -280,7 +299,26 @@ router.post('/:id/tenants', requireAuth, async (req, res) => {
     return res.status(404).json({ message: 'Property not found' });
   }
 
-  const { name, phone, email, roomNumber, moveInDate, monthlyRent } = req.body;
+  const {
+    name,
+    phone,
+    email,
+    roomNumber,
+    moveInDate,
+    monthlyRent,
+    altPhone,
+    moveOutDate,
+    stayType,
+    lockInMonths,
+    noticePeriodDays,
+    agreementPeriodMonths,
+    rentDueDay,
+    securityDeposit,
+    referredBy,
+    remarks,
+    tenantType,
+    otherDetails,
+  } = req.body;
   if (!name || !phone || !moveInDate || !monthlyRent) {
     return res.status(400).json({ message: 'Name, phone, move-in date, and monthly rent are required' });
   }
@@ -290,6 +328,19 @@ router.post('/:id/tenants', requireAuth, async (req, res) => {
   }
   if (typeof monthlyRent !== 'number' || monthlyRent <= 0) {
     return res.status(400).json({ message: 'Invalid monthly rent' });
+  }
+  let parsedMoveOut;
+  if (moveOutDate) {
+    parsedMoveOut = new Date(moveOutDate);
+    if (Number.isNaN(parsedMoveOut.getTime())) {
+      return res.status(400).json({ message: 'Invalid move-out date' });
+    }
+  }
+  if (stayType !== undefined && !Tenant.STAY_TYPES.includes(stayType)) {
+    return res.status(400).json({ message: 'Invalid stay type' });
+  }
+  if (tenantType !== undefined && tenantType !== null && !Tenant.TENANT_TYPES.includes(tenantType)) {
+    return res.status(400).json({ message: 'Invalid tenant type' });
   }
 
   const tenantData = {
@@ -301,21 +352,178 @@ router.post('/:id/tenants', requireAuth, async (req, res) => {
     roomNumber: roomNumber || undefined,
     moveInDate: parsedMoveIn,
     monthlyRent,
+    altPhone: altPhone || undefined,
+    moveOutDate: parsedMoveOut,
+    stayType: stayType || undefined,
+    lockInMonths: lockInMonths ?? undefined,
+    noticePeriodDays: noticePeriodDays ?? undefined,
+    agreementPeriodMonths: agreementPeriodMonths ?? undefined,
+    rentDueDay: rentDueDay ?? undefined,
+    securityDeposit: securityDeposit ?? undefined,
+    referredBy: referredBy || undefined,
+    remarks: remarks || undefined,
+    tenantType: tenantType || undefined,
+    otherDetails: otherDetails || undefined,
   };
 
-  // joinCode collisions are rare (6 chars, 32-char alphabet) but the unique
-  // index can still reject one - regenerate and retry rather than fail the
-  // whole request.
-  let tenant;
-  for (let attempt = 0; attempt < 5 && !tenant; attempt += 1) {
-    try {
-      tenant = await Tenant.create(tenantData);
-    } catch (err) {
-      if (err.code === 11000 && attempt < 4) continue;
-      throw err;
-    }
-  }
+  const tenant = await createTenantRecord(tenantData);
   res.status(201).json({ tenant });
+});
+
+// --- Join requests (self-service) ---
+//
+// A prospective tenant fills out the public web form at GET /invite?id=...
+// (see backend/public/invite.html and GET/POST routes below) without
+// needing the app or an account. The owner reviews it here and approving
+// creates a real Tenant record - same shape POST /:id/tenants makes, just
+// triggered from the other side.
+
+router.get('/:id/join-requests', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const joinRequests = await PropertyJoinRequest.find({ property: property._id, status: 'pending' }).sort({ createdAt: 1 });
+  res.json({ joinRequests });
+});
+
+router.patch('/:id/join-requests/:reqId', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const joinRequest = await PropertyJoinRequest.findOne({ _id: req.params.reqId, property: property._id, status: 'pending' });
+  if (!joinRequest) {
+    return res.status(404).json({ message: 'Request not found' });
+  }
+
+  const { status, monthlyRent } = req.body;
+  if (!['approved', 'rejected'].includes(status)) {
+    return res.status(400).json({ message: 'Invalid status' });
+  }
+
+  if (status === 'rejected') {
+    joinRequest.status = 'rejected';
+    await joinRequest.save();
+    return res.json({ joinRequest });
+  }
+
+  // The requester's own "Rent Amount" field on the web form is optional -
+  // if they (or the owner) never set one, the owner must supply it now,
+  // same as it's required when adding a tenant manually.
+  const rent = monthlyRent ?? joinRequest.monthlyRent;
+  if (typeof rent !== 'number' || rent <= 0) {
+    return res.status(400).json({ message: 'A valid monthly rent is required to approve this request' });
+  }
+
+  const tenant = await createTenantRecord({
+    property: property._id,
+    owner: req.user._id,
+    name: joinRequest.name,
+    phone: joinRequest.phone,
+    altPhone: joinRequest.altPhone || undefined,
+    roomNumber: joinRequest.roomNumber || undefined,
+    monthlyRent: rent,
+    securityDeposit: joinRequest.securityDeposit ?? undefined,
+    moveInDate: joinRequest.moveInDate || new Date(),
+  });
+
+  joinRequest.status = 'approved';
+  joinRequest.tenant = tenant._id;
+  await joinRequest.save();
+  res.json({ joinRequest, tenant });
+});
+
+// --- Public invite (no auth - reached via the QR/link before the visitor
+// has signed in or even installed the app) ---
+
+router.get('/:id/public', async (req, res) => {
+  const property = await Property.findById(req.params.id).select('title location type');
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  res.json({ property });
+});
+
+// Vacant units only, and only label/floor - same privacy shape as the
+// society equivalent (GET /society/flats/public).
+router.get('/:id/units/public', async (req, res) => {
+  const property = await Property.findById(req.params.id).select('_id');
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const units = await Unit.find({ property: property._id, status: 'vacant' }).select('label floor').sort({ floor: 1, label: 1 });
+  res.json({ units });
+});
+
+router.post('/:id/join-requests-public', async (req, res) => {
+  const property = await Property.findById(req.params.id).select('_id');
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const { name, phone, altPhone, roomNumber, monthlyRent, securityDeposit, moveInDate } = req.body;
+  if (!name || !phone) {
+    return res.status(400).json({ message: 'Name and phone are required' });
+  }
+
+  let parsedMoveIn;
+  if (moveInDate) {
+    parsedMoveIn = new Date(moveInDate);
+    if (Number.isNaN(parsedMoveIn.getTime())) parsedMoveIn = undefined;
+  }
+
+  const joinRequest = await PropertyJoinRequest.create({
+    property: property._id,
+    name,
+    phone,
+    altPhone: altPhone || undefined,
+    roomNumber: roomNumber || undefined,
+    monthlyRent: typeof monthlyRent === 'number' ? monthlyRent : undefined,
+    securityDeposit: typeof securityDeposit === 'number' ? securityDeposit : undefined,
+    moveInDate: parsedMoveIn,
+  });
+  res.status(201).json({ joinRequest });
+});
+
+// --- Announcements ---
+//
+// An owner's broadcast to tenants of one property. Only reaches tenants who
+// have actually joined that property (linked their account with the join
+// code shared in AddTenantScreen) - see GET /my-rent/announcements, which
+// is scoped to the signed-in tenant's own linked+active Tenant records.
+
+router.get('/:id/announcements', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const announcements = await Announcement.find({ property: property._id }).sort({ createdAt: -1 });
+  res.json({ announcements });
+});
+
+router.post('/:id/announcements', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const { title, message } = req.body;
+  if (!title || !message) {
+    return res.status(400).json({ message: 'Title and message are required' });
+  }
+  const announcement = await Announcement.create({ property: property._id, owner: req.user._id, title, message });
+  res.status(201).json({ announcement });
+});
+
+router.delete('/:id/announcements/:announcementId', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const result = await Announcement.deleteOne({ _id: req.params.announcementId, property: property._id });
+  if (result.deletedCount === 0) {
+    return res.status(404).json({ message: 'Announcement not found' });
+  }
+  res.json({ success: true });
 });
 
 // --- Rent collection (owner side) ---

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/property_announcement.dart';
+import '../models/property_join_request.dart';
 import '../models/property_listing.dart';
 import '../models/property_unit.dart';
 import '../models/rent_payment.dart';
@@ -173,6 +175,18 @@ class PropertyApi {
     String? roomNumber,
     required num monthlyRent,
     required DateTime moveInDate,
+    String? altPhone,
+    DateTime? moveOutDate,
+    String? stayType,
+    int? lockInMonths,
+    int? noticePeriodDays,
+    int? agreementPeriodMonths,
+    int? rentDueDay,
+    num? securityDeposit,
+    String? referredBy,
+    String? remarks,
+    String? tenantType,
+    String? otherDetails,
   }) async {
     final response = await _post('/properties/$propertyId/tenants', {
       'name': name,
@@ -181,8 +195,58 @@ class PropertyApi {
       if (roomNumber != null && roomNumber.isNotEmpty) 'roomNumber': roomNumber,
       'monthlyRent': monthlyRent,
       'moveInDate': moveInDate.toIso8601String(),
+      if (altPhone != null && altPhone.isNotEmpty) 'altPhone': altPhone,
+      if (moveOutDate != null) 'moveOutDate': moveOutDate.toIso8601String(),
+      if (stayType != null) 'stayType': stayType,
+      if (lockInMonths != null) 'lockInMonths': lockInMonths,
+      if (noticePeriodDays != null) 'noticePeriodDays': noticePeriodDays,
+      if (agreementPeriodMonths != null) 'agreementPeriodMonths': agreementPeriodMonths,
+      if (rentDueDay != null) 'rentDueDay': rentDueDay,
+      if (securityDeposit != null) 'securityDeposit': securityDeposit,
+      if (referredBy != null && referredBy.isNotEmpty) 'referredBy': referredBy,
+      if (remarks != null && remarks.isNotEmpty) 'remarks': remarks,
+      if (tenantType != null && tenantType.isNotEmpty) 'tenantType': tenantType,
+      if (otherDetails != null && otherDetails.isNotEmpty) 'otherDetails': otherDetails,
     });
     return Tenant.fromJson(_decode(response)['tenant'] as Map<String, dynamic>);
+  }
+
+  // --- Join requests (owner side) - see backend/public/invite.html for
+  // the public form these come from. ---
+
+  static Future<List<PropertyJoinRequest>> fetchJoinRequests(String propertyId) async {
+    final response = await _get('/properties/$propertyId/join-requests');
+    final requests = _decode(response)['joinRequests'] as List;
+    return requests.map((j) => PropertyJoinRequest.fromJson(j as Map<String, dynamic>)).toList();
+  }
+
+  /// Approving returns the newly-created [Tenant] (with its join code) so
+  /// the caller can jump straight into sharing it; rejecting returns null.
+  static Future<Tenant?> respondToJoinRequest(String propertyId, String requestId, {required bool approve, num? monthlyRent}) async {
+    final response = await _patch('/properties/$propertyId/join-requests/$requestId', {
+      'status': approve ? 'approved' : 'rejected',
+      if (monthlyRent != null) 'monthlyRent': monthlyRent,
+    });
+    final data = _decode(response);
+    return data['tenant'] != null ? Tenant.fromJson(data['tenant'] as Map<String, dynamic>) : null;
+  }
+
+  // --- Announcements (owner side) ---
+
+  static Future<List<PropertyAnnouncement>> fetchAnnouncements(String propertyId) async {
+    final response = await _get('/properties/$propertyId/announcements');
+    final announcements = _decode(response)['announcements'] as List;
+    return announcements.map((j) => PropertyAnnouncement.fromJson(j as Map<String, dynamic>)).toList();
+  }
+
+  static Future<PropertyAnnouncement> createAnnouncement(String propertyId, {required String title, required String message}) async {
+    final response = await _post('/properties/$propertyId/announcements', {'title': title, 'message': message});
+    return PropertyAnnouncement.fromJson(_decode(response)['announcement'] as Map<String, dynamic>);
+  }
+
+  static Future<void> deleteAnnouncement(String propertyId, String announcementId) async {
+    final response = await _delete('/properties/$propertyId/announcements/$announcementId');
+    _decode(response);
   }
 
   // --- Rent collection (owner side) ---

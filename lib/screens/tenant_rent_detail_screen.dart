@@ -6,6 +6,7 @@ import '../services/property_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
 import '../widgets/pill_badge.dart';
+import 'tenant_invite_screen.dart';
 
 /// One tenant's full rent picture, opened from Collect Payment — due months
 /// with a "Mark Collected" action (owner recorded cash/UPI/bank transfer
@@ -163,7 +164,7 @@ class _TenantRentDetailScreenState extends State<TenantRentDetailScreen> {
                     ],
                   ),
                 ),
-                if (detail.tenant.joinCode != null)
+                if (detail.tenant.joinCode != null) ...[
                   IconButton(
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: detail.tenant.joinCode!));
@@ -172,6 +173,14 @@ class _TenantRentDetailScreenState extends State<TenantRentDetailScreen> {
                     icon: const Icon(Icons.copy_outlined, size: 18, color: AppColors.muted),
                     tooltip: 'Copy code',
                   ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => TenantInviteScreen(tenant: detail.tenant)),
+                    ),
+                    icon: const Icon(Icons.qr_code_2_outlined, size: 18, color: AppColors.muted),
+                    tooltip: 'Share invite',
+                  ),
+                ],
               ],
             ),
           ),

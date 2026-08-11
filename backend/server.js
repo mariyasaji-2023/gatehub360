@@ -25,6 +25,10 @@ app.use((req, res, next) => {
 });
 
 app.get('/privacy-policy', (req, res) => res.sendFile(path.join(__dirname, 'public', 'privacy-policy.html')));
+// Public join-request form a QR code (from AddTenantScreen's Invite tab)
+// or a shared link points to - no login needed, see routes/properties.js's
+// GET /:id/public and POST /:id/join-requests-public.
+app.get('/invite', (req, res) => res.sendFile(path.join(__dirname, 'public', 'invite.html')));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', authRoutes);
