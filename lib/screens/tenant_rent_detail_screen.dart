@@ -458,15 +458,20 @@ class _DocumentRow extends StatelessWidget {
             ],
           )
         else if (url == null)
-          OutlinedButton.icon(
-            onPressed: onUpload,
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppColors.border),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              visualDensity: VisualDensity.compact,
-            ),
-            icon: const Icon(Icons.upload_file_outlined, size: 15),
-            label: const Text('Upload', style: TextStyle(fontSize: 12.5)),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onUpload,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.border),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  visualDensity: VisualDensity.compact,
+                ),
+                icon: const Icon(Icons.upload_file_outlined, size: 15),
+                label: const Text('Upload', style: TextStyle(fontSize: 12.5)),
+              ),
+            ],
           )
         else
           Row(
