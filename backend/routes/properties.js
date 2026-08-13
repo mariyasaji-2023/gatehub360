@@ -43,13 +43,35 @@ function validateVideoUrl(videoUrl) {
   return { valid: true, videoUrl };
 }
 
+// Same shape as validateVideoUrl above, generalized for the tenant KYC
+// document / rental agreement uploads (also Cloudinary-hosted, uploaded
+// straight from the app - see lib/services/cloudinary_api.dart).
+function validateDocUrl(url) {
+  if (url === undefined || url === null || url === '') return { valid: true, url: null };
+  if (typeof url !== 'string' || url.length > 500 || !/^https:\/\//.test(url)) {
+    return { valid: false, message: 'Invalid document URL' };
+  }
+  return { valid: true, url };
+}
+
+// Amenities aren't limited to Property.AMENITIES - owners can also type
+// their own, so this only bounds count/length rather than checking against
+// that preset list.
+const MAX_AMENITIES = 25;
+const MAX_AMENITY_LENGTH = 40;
+
 function validateAmenities(amenities) {
   if (amenities === undefined) return { valid: true, amenities: undefined };
   if (!Array.isArray(amenities)) return { valid: false, message: 'Amenities must be a list' };
+  if (amenities.length > MAX_AMENITIES) return { valid: false, message: `You can add up to ${MAX_AMENITIES} amenities` };
+  const cleaned = [];
   for (const a of amenities) {
-    if (!Property.AMENITIES.includes(a)) return { valid: false, message: `Invalid amenity: ${a}` };
+    if (typeof a !== 'string' || !a.trim()) return { valid: false, message: 'Invalid amenity' };
+    const trimmed = a.trim();
+    if (trimmed.length > MAX_AMENITY_LENGTH) return { valid: false, message: 'One of the amenities is too long' };
+    cleaned.push(trimmed);
   }
-  return { valid: true, amenities: [...new Set(amenities)] };
+  return { valid: true, amenities: [...new Set(cleaned)] };
 }
 
 // Shared by POST /:id/tenants and the join-request approval route below -
@@ -117,7 +139,8 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(403).json({ message: 'Only property owners can add properties' });
   }
 
-  const { type, mode, title, location, address, price, bhk, sqft, about, contact, active, images, videoUrl, amenities } = req.body;
+  const { type, mode, title, location, address, price, rentAmount, deposit, bhk, sqft, about, contact, active, images, videoUrl, amenities } =
+    req.body;
   if (!Property.TYPES.includes(type)) {
     return res.status(400).json({ message: 'Invalid property type' });
   }
@@ -151,6 +174,8 @@ router.post('/', requireAuth, async (req, res) => {
     location,
     address: typeof address === 'string' ? address : '',
     price,
+    rentAmount: typeof rentAmount === 'string' ? rentAmount : '',
+    deposit: typeof deposit === 'string' ? deposit : '',
     bhk,
     sqft,
     about,
@@ -169,7 +194,8 @@ router.patch('/:id', requireAuth, async (req, res) => {
     return res.status(404).json({ message: 'Property not found' });
   }
 
-  const { type, mode, title, location, address, price, bhk, sqft, about, contact, active, images, videoUrl, amenities } = req.body;
+  const { type, mode, title, location, address, price, rentAmount, deposit, bhk, sqft, about, contact, active, images, videoUrl, amenities } =
+    req.body;
   if (type !== undefined) {
     if (!Property.TYPES.includes(type)) return res.status(400).json({ message: 'Invalid property type' });
     property.type = type;
@@ -186,6 +212,8 @@ router.patch('/:id', requireAuth, async (req, res) => {
   if (location !== undefined) property.location = location;
   if (address !== undefined) property.address = typeof address === 'string' ? address : '';
   if (price !== undefined) property.price = price;
+  if (rentAmount !== undefined) property.rentAmount = typeof rentAmount === 'string' ? rentAmount : '';
+  if (deposit !== undefined) property.deposit = typeof deposit === 'string' ? deposit : '';
   if (sqft !== undefined) property.sqft = sqft;
   if (about !== undefined) property.about = about;
   if (contact !== undefined) property.contact = contact;
@@ -439,6 +467,115 @@ router.post('/:id/tenants', requireAuth, async (req, res) => {
 
   const tenant = await createTenantRecord(tenantData);
   res.status(201).json({ tenant });
+});
+
+// Covers everything an owner can edit after a tenant's already on record:
+// contact details, stay terms, marking them moved out (status + moveOutDate),
+// and attaching/replacing their KYC document or rental agreement.
+router.patch('/:id/tenants/:tenantId', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const tenant = await Tenant.findOne({ _id: req.params.tenantId, property: property._id });
+  if (!tenant) {
+    return res.status(404).json({ message: 'Tenant not found' });
+  }
+
+  const {
+    name,
+    phone,
+    email,
+    roomNumber,
+    monthlyRent,
+    altPhone,
+    moveOutDate,
+    status,
+    stayType,
+    lockInMonths,
+    noticePeriodDays,
+    agreementPeriodMonths,
+    rentDueDay,
+    securityDeposit,
+    referredBy,
+    remarks,
+    tenantType,
+    otherDetails,
+    kycDocumentUrl,
+    rentalAgreementUrl,
+  } = req.body;
+
+  if (name !== undefined) tenant.name = name;
+  if (phone !== undefined) tenant.phone = phone;
+  if (email !== undefined) tenant.email = email || undefined;
+  if (roomNumber !== undefined) tenant.roomNumber = roomNumber || undefined;
+  if (monthlyRent !== undefined) {
+    if (typeof monthlyRent !== 'number' || monthlyRent <= 0) {
+      return res.status(400).json({ message: 'Invalid monthly rent' });
+    }
+    tenant.monthlyRent = monthlyRent;
+  }
+  if (altPhone !== undefined) tenant.altPhone = altPhone || undefined;
+  if (moveOutDate !== undefined) {
+    if (moveOutDate === null) {
+      tenant.moveOutDate = null;
+    } else {
+      const parsedMoveOut = new Date(moveOutDate);
+      if (Number.isNaN(parsedMoveOut.getTime())) {
+        return res.status(400).json({ message: 'Invalid move-out date' });
+      }
+      tenant.moveOutDate = parsedMoveOut;
+    }
+  }
+  if (status !== undefined) {
+    if (!Tenant.STATUSES.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+    tenant.status = status;
+  }
+  if (stayType !== undefined) {
+    if (!Tenant.STAY_TYPES.includes(stayType)) return res.status(400).json({ message: 'Invalid stay type' });
+    tenant.stayType = stayType;
+  }
+  if (lockInMonths !== undefined) tenant.lockInMonths = lockInMonths;
+  if (noticePeriodDays !== undefined) tenant.noticePeriodDays = noticePeriodDays;
+  if (agreementPeriodMonths !== undefined) tenant.agreementPeriodMonths = agreementPeriodMonths;
+  if (rentDueDay !== undefined) tenant.rentDueDay = rentDueDay;
+  if (securityDeposit !== undefined) tenant.securityDeposit = securityDeposit;
+  if (referredBy !== undefined) tenant.referredBy = referredBy || undefined;
+  if (remarks !== undefined) tenant.remarks = remarks || undefined;
+  if (tenantType !== undefined) {
+    if (tenantType !== null && !Tenant.TENANT_TYPES.includes(tenantType)) {
+      return res.status(400).json({ message: 'Invalid tenant type' });
+    }
+    tenant.tenantType = tenantType || undefined;
+  }
+  if (otherDetails !== undefined) tenant.otherDetails = otherDetails || undefined;
+  if (kycDocumentUrl !== undefined) {
+    const check = validateDocUrl(kycDocumentUrl);
+    if (!check.valid) return res.status(400).json({ message: check.message });
+    tenant.kycDocumentUrl = check.url;
+  }
+  if (rentalAgreementUrl !== undefined) {
+    const check = validateDocUrl(rentalAgreementUrl);
+    if (!check.valid) return res.status(400).json({ message: check.message });
+    tenant.rentalAgreementUrl = check.url;
+  }
+
+  await tenant.save();
+  res.json({ tenant });
+});
+
+router.delete('/:id/tenants/:tenantId', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const result = await Tenant.deleteOne({ _id: req.params.tenantId, property: property._id });
+  if (result.deletedCount === 0) {
+    return res.status(404).json({ message: 'Tenant not found' });
+  }
+  res.json({ success: true });
 });
 
 // --- Join requests (self-service) ---

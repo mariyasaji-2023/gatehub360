@@ -54,7 +54,10 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
   RentSummary? _rentSummary;
   VacancySummary? _vacancy;
   int? _openComplaints;
-  bool _publishing = false;
+  // True only for the initial load - without it, _vacancy being null (not
+  // fetched yet) looks identical to "no rooms added", so the empty-state
+  // "Add Room & Beds" card would flash briefly before the real data arrives.
+  bool _loadingVacancy = true;
 
   @override
   void initState() {
@@ -63,16 +66,25 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
   }
 
   Future<void> _load() async {
-    final user = await AuthService.syncCurrentUser();
-    final rentSummary = await _loadRentSummary();
-    final vacancy = await _loadVacancy();
-    final openComplaints = await _loadOpenComplaints();
+    // These 4 calls are independent of each other, so firing them together
+    // and waiting on the slowest one beats waiting on all four back-to-back.
+    final results = await Future.wait([
+      AuthService.syncCurrentUser(),
+      _loadRentSummary(),
+      _loadVacancy(),
+      _loadOpenComplaints(),
+    ]);
+    final user = results[0] as AuthUser?;
+    final rentSummary = results[1] as RentSummary?;
+    final vacancy = results[2] as VacancySummary?;
+    final openComplaints = results[3] as int?;
     if (!mounted) return;
     setState(() {
       _user = user;
       _rentSummary = rentSummary;
       _vacancy = vacancy;
       _openComplaints = openComplaints;
+      _loadingVacancy = false;
     });
   }
 
@@ -158,24 +170,6 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
     setState(() => _vacancy = vacancy);
   }
 
-  Future<void> _publishVacancy() async {
-    setState(() => _publishing = true);
-    try {
-      await PropertyApi.publishVacancy(widget.listing.id);
-      final vacancy = await _loadVacancy();
-      if (!mounted) return;
-      setState(() {
-        _vacancy = vacancy;
-        _publishing = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vacancy published')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _publishing = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not publish vacancy: $e')));
-    }
-  }
-
   // Opens the property's address in Google Maps - just a text search, since
   // the app only stores a free-text address, not coordinates. Prefers the
   // detailed `address` field when the owner filled it in; falls back to the
@@ -189,6 +183,39 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
     }
   }
 
+  // Shows the property's amenities in a bottom sheet - used to be a card
+  // permanently taking up space at the bottom of the dashboard; now tucked
+  // behind this Quick Action instead.
+  void _showAmenities() {
+    if (widget.listing.amenities.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No amenities added yet — edit the property to add some.')),
+      );
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+              ),
+              AmenitiesCard(amenities: widget.listing.amenities),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // Placeholder quick actions — wire the rest up to real flows as each one
   // is built. More actions to come.
   List<QuickAction> get _quickActions => [
@@ -198,6 +225,7 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
         QuickAction(icon: Icons.request_page_outlined, label: 'Collect Payment', onTap: _openCollectPayment),
         QuickAction(icon: Icons.campaign_outlined, label: 'Send Announcement', onTap: _openAnnouncements),
         QuickAction(icon: Icons.map_outlined, label: 'Property Address', onTap: _openAddress),
+        QuickAction(icon: Icons.check_circle_outline, label: 'Amenities', onTap: _showAmenities),
         const QuickAction(icon: Icons.trending_down_outlined, label: 'Add Expense'),
         const QuickAction(icon: Icons.request_quote_outlined, label: 'Add Dues'),
       ];
@@ -232,23 +260,18 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
           ),
           StatOverviewBar(items: _overviewItems(_rentSummary, _vacancy, _openComplaints, _openComplaintsList)),
           QuickActionsSection(actions: _quickActions),
-          hasUnits ? _buildOccupancyCard() : _buildEmptyOccupancyCard(),
-          if (widget.listing.amenities.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: AmenitiesCard(amenities: widget.listing.amenities),
-            ),
-          ],
+          _loadingVacancy
+              ? _buildVacancyLoadingCard()
+              : (hasUnits ? _buildVacancyManagementCard() : _buildEmptyVacancyCard()),
           const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyOccupancyCard() {
+  Widget _buildEmptyVacancyCard() {
     return EmptyStateSectionCard(
-      title: 'Occupancy',
+      title: 'Vacancy Management',
       icon: Icons.bed_outlined,
       description: 'How full is your property? Add your rooms to find out.',
       buttonLabel: 'Add Room & Beds',
@@ -256,9 +279,25 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
     );
   }
 
-  Widget _buildOccupancyCard() {
+  Widget _buildVacancyLoadingCard() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
+      ),
+    );
+  }
+
+  Widget _buildVacancyManagementCard() {
     final vacancy = _vacancy!;
-    final publishedAt = vacancy.vacancyPublishedAt;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
@@ -271,48 +310,77 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Occupancy', style: AppFonts.heading(fontSize: 15.5, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Text(
-              '${vacancy.totalUnits} unit${vacancy.totalUnits > 1 ? 's' : ''} across ${vacancy.totalFloors} floor${vacancy.totalFloors > 1 ? 's' : ''} · ${vacancy.vacantUnits} vacant · ${vacancy.occupiedUnits} occupied',
-              style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.4),
+            Row(
+              children: [
+                Expanded(child: Text('Vacancy Management', style: AppFonts.heading(fontSize: 15.5, fontWeight: FontWeight.w700))),
+                IconButton(
+                  onPressed: _openAddRooms,
+                  tooltip: 'Add more rooms',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.add_circle_outline, color: AppColors.brand),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
             Text(
-              publishedAt == null ? 'Vacancy not published yet' : 'Last published ${_formatDate(publishedAt)}',
-              style: TextStyle(fontSize: 11.5, color: publishedAt == null ? AppColors.amber : AppColors.success, fontWeight: FontWeight.w600),
+              '${vacancy.totalUnits} unit${vacancy.totalUnits == 1 ? '' : 's'} across ${vacancy.totalFloors} floor${vacancy.totalFloors == 1 ? '' : 's'}',
+              style: const TextStyle(fontSize: 12, color: AppColors.muted),
             ),
             const SizedBox(height: 14),
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context)
-                        .push(MaterialPageRoute(builder: (_) => PropertyUnitsScreen(propertyId: widget.listing.id))),
-                    style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.border)),
-                    child: const Text('Manage Rooms', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ),
-                ),
+                Expanded(child: _VacancyStat(icon: Icons.apartment_outlined, value: vacancy.totalUnits, label: 'Total Units', color: AppColors.brand)),
                 const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _publishing ? null : _publishVacancy,
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.brand, foregroundColor: AppColors.brandOnDark),
-                    child: _publishing
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Publish Vacancy', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ),
-                ),
+                Expanded(child: _VacancyStat(icon: Icons.event_busy_outlined, value: vacancy.occupiedUnits, label: 'Occupied', color: AppColors.amber)),
+                const SizedBox(width: 10),
+                Expanded(child: _VacancyStat(icon: Icons.event_available_outlined, value: vacancy.vacantUnits, label: 'Vacant', color: AppColors.success)),
               ],
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => PropertyUnitsScreen(propertyId: widget.listing.id)))
+                    .then((_) async {
+                  final vacancy = await _loadVacancy();
+                  if (!mounted) return;
+                  setState(() => _vacancy = vacancy);
+                }),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.brand, foregroundColor: AppColors.brandOnDark),
+                child: const Text('Update Vacancy Status', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  String _formatDate(DateTime date) {
-    final local = date.toLocal();
-    return '${local.day}/${local.month}/${local.year}';
+/// One of the three at-a-glance figures (Total/Occupied/Vacant) inside the
+/// Vacancy Management card.
+class _VacancyStat extends StatelessWidget {
+  final IconData icon;
+  final int value;
+  final String label;
+  final Color color;
+
+  const _VacancyStat({required this.icon, required this.value, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 6),
+          Text('$value', style: AppFonts.heading(fontSize: 18, fontWeight: FontWeight.w800, color: color)),
+          const SizedBox(height: 2),
+          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.muted, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
   }
 }

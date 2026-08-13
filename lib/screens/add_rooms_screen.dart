@@ -203,9 +203,9 @@ class _AddRoomsScreenState extends State<AddRoomsScreen> {
           children: [
             Expanded(child: _FloorStatTile(value: '${floors.length}', label: 'Total Floors', color: AppColors.brand)),
             const SizedBox(width: 10),
-            Expanded(child: _FloorStatTile(value: '$filledFloors', label: 'Filled Floors', color: AppColors.success)),
+            Expanded(child: _FloorStatTile(value: '$filledFloors', label: 'Floors Set Up', color: AppColors.success)),
             const SizedBox(width: 10),
-            Expanded(child: _FloorStatTile(value: '${floors.length - filledFloors}', label: 'Vacant Floors', color: AppColors.danger)),
+            Expanded(child: _FloorStatTile(value: '${floors.length - filledFloors}', label: 'Floors Pending', color: AppColors.amber)),
           ],
         ),
         const SizedBox(height: 16),

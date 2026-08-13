@@ -33,8 +33,7 @@ function generateJoinCode() {
 // only becomes payable-by-them once they enter `joinCode` in the app, which
 // sets `linkedUser` (see routes/rent.js) - the actual authorization boundary
 // for everything rent-related. `phone`/`phoneDigits` are kept as contact
-// info the owner sees, not used for matching. KYC and rental agreement
-// upload are a follow-up once file storage is wired up.
+// info the owner sees, not used for matching.
 const tenantSchema = new mongoose.Schema(
   {
     property: { type: mongoose.Schema.Types.ObjectId, ref: 'Property', required: true, index: true },
@@ -67,6 +66,12 @@ const tenantSchema = new mongoose.Schema(
     remarks: { type: String, trim: true },
     tenantType: { type: String, enum: TENANT_TYPES, default: null },
     otherDetails: { type: String, trim: true },
+
+    // --- KYC + agreement (both hosted on Cloudinary, uploaded straight
+    // from the app - see lib/services/cloudinary_api.dart - only the
+    // resulting URL is stored here, same approach as property videos) ---
+    kycDocumentUrl: { type: String, default: null, trim: true },
+    rentalAgreementUrl: { type: String, default: null, trim: true },
   },
   { timestamps: true }
 );

@@ -58,6 +58,32 @@ class _TenantsScreenState extends State<TenantsScreen> {
     _load();
   }
 
+  Future<void> _confirmRemove(Tenant tenant) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Remove tenant?'),
+        content: Text('"${tenant.name}" and their rent history will be permanently removed from this property.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await PropertyApi.deleteTenant(widget.propertyId, tenant.id);
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not remove tenant: $e')));
+    }
+  }
+
   Future<void> _showJoinCode(Tenant tenant) {
     return showDialog<void>(
       context: context,
@@ -179,8 +205,14 @@ class _TenantsScreenState extends State<TenantsScreen> {
                   tenant.status == 'active'
                       ? const PillBadge(label: 'Active', color: AppColors.success)
                       : PillBadge(label: tenant.status[0].toUpperCase() + tenant.status.substring(1), color: AppColors.muted),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.chevron_right, color: AppColors.muted),
+                  PopupMenuButton<String>(
+                    onSelected: (v) {
+                      if (v == 'remove') _confirmRemove(tenant);
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'remove', child: Text('Remove Tenant')),
+                    ],
+                  ),
                 ],
               ),
             ),

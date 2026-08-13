@@ -3,6 +3,9 @@ const mongoose = require('mongoose');
 const TYPES = ['Apartment', 'Villa', 'Plot', 'Commercial'];
 const MODES = ['Buy', 'Rent', 'Sell', 'Commercial'];
 const BHKS = ['1 BHK', '2 BHK', '3 BHK', '4 BHK', 'N/A'];
+// Preset suggestions shown as chips in the app - not an enforced enum, since
+// owners can also type their own custom amenity (see MAX_AMENITIES /
+// MAX_AMENITY_LENGTH in routes/properties.js for the free-text limits).
 const AMENITIES = [
   'Parking',
   'Lift',
@@ -34,6 +37,11 @@ const propertySchema = new mongoose.Schema(
     // falling back to `location` otherwise.
     address: { type: String, default: '', trim: true },
     price: { type: String, required: true, trim: true },
+    // Optional, more specific figures than the free-text `price` display
+    // string above - set via the "Property Details" shortcuts on the
+    // owner's dashboard.
+    rentAmount: { type: String, default: '', trim: true },
+    deposit: { type: String, default: '', trim: true },
     bhk: { type: String, required: true, enum: BHKS },
     sqft: { type: String, required: true, trim: true },
     about: { type: String, required: true, trim: true },
@@ -49,7 +57,7 @@ const propertySchema = new mongoose.Schema(
     // app uploads it straight to Cloudinary and only the resulting hosted
     // URL is saved here.
     videoUrl: { type: String, default: null, trim: true },
-    amenities: { type: [String], enum: AMENITIES, default: [] },
+    amenities: { type: [String], default: [] },
     // Floor names the owner has added for vacancy management (e.g. "Ground
     // Floor", "1st Floor") - order as added, individual Units reference these
     // by name rather than a separate Floor collection.

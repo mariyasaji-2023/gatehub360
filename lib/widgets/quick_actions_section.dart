@@ -9,16 +9,15 @@ class QuickAction {
   const QuickAction({required this.icon, required this.label, this.onTap});
 }
 
-/// "Quick Actions" style section — a title row with a "View All" link, above
-/// a fixed 4-column grid of circular icon shortcuts (wraps to as many rows
-/// as needed, no horizontal scrolling). Tapping an action with no `onTap`
-/// wired yet just says so, instead of doing nothing.
+/// "Quick Actions" style section — a title row above a fixed 4-column grid
+/// of circular icon shortcuts (wraps to as many rows as needed, no
+/// horizontal scrolling). Tapping an action with no `onTap` wired yet just
+/// says so, instead of doing nothing.
 class QuickActionsSection extends StatelessWidget {
   final String title;
   final List<QuickAction> actions;
-  final VoidCallback? onViewAll;
 
-  const QuickActionsSection({super.key, this.title = 'Quick Actions', required this.actions, this.onViewAll});
+  const QuickActionsSection({super.key, this.title = 'Quick Actions', required this.actions});
 
   @override
   Widget build(BuildContext context) {
@@ -27,24 +26,7 @@ class QuickActionsSection extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-          child: Row(
-            children: [
-              Expanded(child: Text(title, style: AppFonts.heading(fontSize: 17, fontWeight: FontWeight.w700))),
-              InkWell(
-                onTap: onViewAll ??
-                    () => ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon')),
-                        ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('View All', style: TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w600)),
-                    Icon(Icons.chevron_right, size: 16, color: AppColors.muted),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          child: Text(title, style: AppFonts.heading(fontSize: 17, fontWeight: FontWeight.w700)),
         ),
         GridView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 20),

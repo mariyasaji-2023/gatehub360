@@ -39,6 +39,11 @@ class Tenant {
   final String? tenantType;
   final String? otherDetails;
 
+  // --- KYC + rental agreement - both hosted on Cloudinary; only the URL
+  // lives here (see lib/services/cloudinary_api.dart) ---
+  final String? kycDocumentUrl;
+  final String? rentalAgreementUrl;
+
   const Tenant({
     required this.id,
     required this.name,
@@ -65,6 +70,8 @@ class Tenant {
     this.remarks,
     this.tenantType,
     this.otherDetails,
+    this.kycDocumentUrl,
+    this.rentalAgreementUrl,
   });
 
   bool get isFullyPaid => (pendingMonths ?? 0) == 0;
@@ -95,5 +102,7 @@ class Tenant {
         remarks: json['remarks'] as String?,
         tenantType: json['tenantType'] as String?,
         otherDetails: json['otherDetails'] as String?,
+        kycDocumentUrl: json['kycDocumentUrl'] as String?,
+        rentalAgreementUrl: json['rentalAgreementUrl'] as String?,
       );
 }

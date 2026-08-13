@@ -1,7 +1,12 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/rent_payment.dart';
 import '../models/tenant.dart';
+import '../services/cloudinary_api.dart';
 import '../services/property_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
@@ -26,6 +31,10 @@ class _TenantRentDetailScreenState extends State<TenantRentDetailScreen> {
   bool _loading = true;
   String? _error;
   DueMonth? _collecting;
+  // null = not uploading; 0-1 = in-progress upload fraction.
+  double? _kycUploadProgress;
+  double? _agreementUploadProgress;
+  bool _updatingMoveOut = false;
 
   @override
   void initState() {
@@ -72,6 +81,79 @@ class _TenantRentDetailScreenState extends State<TenantRentDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not record payment: $e')));
     } finally {
       if (mounted) setState(() => _collecting = null);
+    }
+  }
+
+  // KYC and the rental agreement are handled identically - just a photo or
+  // PDF uploaded straight to Cloudinary, with the resulting URL saved on
+  // the tenant. `isKyc` picks which field it lands in and which progress
+  // indicator to drive.
+  Future<void> _pickAndUploadDocument({required bool isKyc}) async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf']);
+    final path = result?.files.single.path;
+    if (path == null) return;
+
+    setState(() => isKyc ? _kycUploadProgress = 0 : _agreementUploadProgress = 0);
+    try {
+      final url = await CloudinaryApi.uploadFile(
+        File(path),
+        onProgress: (p) {
+          if (!mounted) return;
+          setState(() => isKyc ? _kycUploadProgress = p : _agreementUploadProgress = p);
+        },
+      );
+      await PropertyApi.updateTenant(
+        widget.propertyId,
+        widget.tenant.id,
+        kycDocumentUrl: isKyc ? url : null,
+        updateKycDocumentUrl: isKyc,
+        rentalAgreementUrl: isKyc ? null : url,
+        updateRentalAgreementUrl: !isKyc,
+      );
+      if (!mounted) return;
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not upload: $e')));
+    } finally {
+      if (mounted) setState(() => isKyc ? _kycUploadProgress = null : _agreementUploadProgress = null);
+    }
+  }
+
+  Future<void> _viewDocument(String url) async {
+    final launched = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open document')));
+    }
+  }
+
+  Future<void> _markMovedOut() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: widget.tenant.moveInDate,
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked == null) return;
+
+    setState(() => _updatingMoveOut = true);
+    try {
+      await PropertyApi.updateTenant(
+        widget.propertyId,
+        widget.tenant.id,
+        status: 'moved_out',
+        moveOutDate: picked,
+        updateMoveOutDate: true,
+      );
+      if (!mounted) return;
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Marked as moved out')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update: $e')));
+    } finally {
+      if (mounted) setState(() => _updatingMoveOut = false);
     }
   }
 
@@ -140,6 +222,45 @@ class _TenantRentDetailScreenState extends State<TenantRentDetailScreen> {
                 const SizedBox(height: 6),
                 _detailRow(Icons.event_busy_outlined, 'Moved out ${_formatDate(detail.tenant.moveOutDate!)}'),
               ],
+              if (detail.tenant.status == 'active') ...[
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _updatingMoveOut ? null : _markMovedOut,
+                    style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.border)),
+                    icon: _updatingMoveOut
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.event_busy_outlined, size: 16),
+                    label: const Text('Mark as Moved Out', style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        DarkCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Documents', style: AppFonts.heading(fontSize: 14.5, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              _DocumentRow(
+                label: 'KYC Document',
+                url: detail.tenant.kycDocumentUrl,
+                uploadProgress: _kycUploadProgress,
+                onUpload: () => _pickAndUploadDocument(isKyc: true),
+                onView: _viewDocument,
+              ),
+              const SizedBox(height: 10),
+              _DocumentRow(
+                label: 'Rental Agreement',
+                url: detail.tenant.rentalAgreementUrl,
+                uploadProgress: _agreementUploadProgress,
+                onUpload: () => _pickAndUploadDocument(isKyc: false),
+                onView: _viewDocument,
+              ),
             ],
           ),
         ),
@@ -299,6 +420,72 @@ class _MethodPickerSheet extends StatelessWidget {
           const SizedBox(height: 8),
         ],
       ),
+    );
+  }
+}
+
+/// One row of the "Documents" card - either an "Upload" button, an
+/// in-progress percentage, or "Uploaded" with View/Replace actions.
+class _DocumentRow extends StatelessWidget {
+  final String label;
+  final String? url;
+  // null = not uploading; 0-1 = in-progress upload fraction.
+  final double? uploadProgress;
+  final VoidCallback onUpload;
+  final void Function(String url) onView;
+
+  const _DocumentRow({
+    required this.label,
+    required this.url,
+    required this.uploadProgress,
+    required this.onUpload,
+    required this.onView,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = uploadProgress;
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600))),
+        if (progress != null)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, value: progress > 0 ? progress : null)),
+              const SizedBox(width: 8),
+              Text('${(progress * 100).round()}%', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+            ],
+          )
+        else if (url == null)
+          OutlinedButton.icon(
+            onPressed: onUpload,
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: AppColors.border),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              visualDensity: VisualDensity.compact,
+            ),
+            icon: const Icon(Icons.upload_file_outlined, size: 15),
+            label: const Text('Upload', style: TextStyle(fontSize: 12.5)),
+          )
+        else
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton(
+                onPressed: () => onView(url!),
+                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                child: const Text('View', style: TextStyle(fontSize: 12.5)),
+              ),
+              const SizedBox(width: 12),
+              TextButton(
+                onPressed: onUpload,
+                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                child: const Text('Replace', style: TextStyle(fontSize: 12.5)),
+              ),
+            ],
+          ),
+      ],
     );
   }
 }

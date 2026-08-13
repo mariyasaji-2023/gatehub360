@@ -38,6 +38,8 @@ class PropertyApi {
     required String location,
     String address = '',
     required String price,
+    String rentAmount = '',
+    String deposit = '',
     required String bhk,
     required String sqft,
     required String about,
@@ -54,6 +56,8 @@ class PropertyApi {
       'location': location,
       'address': address,
       'price': price,
+      'rentAmount': rentAmount,
+      'deposit': deposit,
       'bhk': bhk,
       'sqft': sqft,
       'about': about,
@@ -74,6 +78,8 @@ class PropertyApi {
     String? location,
     String? address,
     String? price,
+    String? rentAmount,
+    String? deposit,
     String? bhk,
     String? sqft,
     String? about,
@@ -94,6 +100,8 @@ class PropertyApi {
       if (location != null) 'location': location,
       if (address != null) 'address': address,
       if (price != null) 'price': price,
+      if (rentAmount != null) 'rentAmount': rentAmount,
+      if (deposit != null) 'deposit': deposit,
       if (bhk != null) 'bhk': bhk,
       if (sqft != null) 'sqft': sqft,
       if (about != null) 'about': about,
@@ -230,6 +238,36 @@ class PropertyApi {
       if (otherDetails != null && otherDetails.isNotEmpty) 'otherDetails': otherDetails,
     });
     return Tenant.fromJson(_decode(response)['tenant'] as Map<String, dynamic>);
+  }
+
+  /// Covers marking a tenant moved out (status + moveOutDate) and
+  /// attaching/replacing their KYC document or rental agreement. The
+  /// `updateX` flags exist because these fields need to distinguish "leave
+  /// as-is" (omit) from "clear it" (pass null explicitly) - a plain
+  /// nullable param can't tell those apart.
+  static Future<Tenant> updateTenant(
+    String propertyId,
+    String tenantId, {
+    DateTime? moveOutDate,
+    bool updateMoveOutDate = false,
+    String? status,
+    String? kycDocumentUrl,
+    bool updateKycDocumentUrl = false,
+    String? rentalAgreementUrl,
+    bool updateRentalAgreementUrl = false,
+  }) async {
+    final response = await _patch('/properties/$propertyId/tenants/$tenantId', {
+      if (updateMoveOutDate) 'moveOutDate': moveOutDate?.toIso8601String(),
+      if (status != null) 'status': status,
+      if (updateKycDocumentUrl) 'kycDocumentUrl': kycDocumentUrl,
+      if (updateRentalAgreementUrl) 'rentalAgreementUrl': rentalAgreementUrl,
+    });
+    return Tenant.fromJson(_decode(response)['tenant'] as Map<String, dynamic>);
+  }
+
+  static Future<void> deleteTenant(String propertyId, String tenantId) async {
+    final response = await _delete('/properties/$propertyId/tenants/$tenantId');
+    _decode(response);
   }
 
   // --- Join requests (owner side) - see backend/public/invite.html for

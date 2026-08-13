@@ -16,6 +16,11 @@ class MyPropertyListing {
   // "Property Address" Quick Action's map link when present.
   final String address;
   final String price;
+  // More specific figures than the free-text [price] display string above -
+  // both optional, set via the "Property Details" shortcuts on the
+  // dashboard.
+  final String rentAmount;
+  final String deposit;
   final String bhk;
   final String sqft;
   final String about;
@@ -37,6 +42,8 @@ class MyPropertyListing {
     required this.location,
     this.address = '',
     required this.price,
+    this.rentAmount = '',
+    this.deposit = '',
     required this.bhk,
     required this.sqft,
     required this.about,
@@ -58,6 +65,8 @@ class MyPropertyListing {
         location: json['location'] as String,
         address: json['address'] as String? ?? '',
         price: json['price'] as String,
+        rentAmount: json['rentAmount'] as String? ?? '',
+        deposit: json['deposit'] as String? ?? '',
         bhk: json['bhk'] as String,
         sqft: json['sqft'] as String,
         about: json['about'] as String,

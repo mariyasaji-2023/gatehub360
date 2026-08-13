@@ -19,9 +19,6 @@ const _sections = [
     _UnitRow('Single Sharing', 1),
     _UnitRow('Double Sharing', 2),
     _UnitRow('3 Sharing', 3),
-    _UnitRow('4 Sharing', 4),
-    _UnitRow('5 Sharing', 5),
-    _UnitRow('6 Sharing', 6),
   ]),
   _UnitSection('RK', [
     _UnitRow('1 RK', 1),
