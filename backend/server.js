@@ -14,7 +14,9 @@ const rentRoutes = require('./routes/rent');
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+// Raised from the default 100kb so property listings can include a handful
+// of base64-encoded photos (see MAX_IMAGES/MAX_IMAGE_LENGTH in routes/properties.js).
+app.use(express.json({ limit: '15mb' }));
 
 app.use((req, res, next) => {
   const start = Date.now();

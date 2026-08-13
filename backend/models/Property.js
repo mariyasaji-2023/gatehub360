@@ -17,6 +17,11 @@ const propertySchema = new mongoose.Schema(
     about: { type: String, required: true, trim: true },
     contact: { type: String, required: true, trim: true },
     active: { type: Boolean, default: true },
+    // Photos of the property, added when the owner creates/edits the listing.
+    // Stored as plain base64 (no data: URI prefix) so there's no dependency
+    // on external file storage - fine at this app's scale since MAX_IMAGES
+    // and per-image size are capped in the route handlers below.
+    images: { type: [String], default: [] },
     // Floor names the owner has added for vacancy management (e.g. "Ground
     // Floor", "1st Floor") - order as added, individual Units reference these
     // by name rather than a separate Floor collection.

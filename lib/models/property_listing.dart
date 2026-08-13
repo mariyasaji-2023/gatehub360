@@ -19,6 +19,9 @@ class MyPropertyListing {
   final String contact;
   final bool active;
   final int unreadEnquiries;
+  // Base64-encoded photos the owner added (no data: URI prefix) - decode
+  // with base64Decode and render via Image.memory.
+  final List<String> images;
 
   const MyPropertyListing({
     required this.id,
@@ -33,6 +36,7 @@ class MyPropertyListing {
     required this.contact,
     this.active = true,
     this.unreadEnquiries = 0,
+    this.images = const [],
   });
 
   String get emoji => emojiForPropertyType(type);
@@ -50,6 +54,7 @@ class MyPropertyListing {
         contact: json['contact'] as String,
         active: json['active'] as bool? ?? true,
         unreadEnquiries: json['unreadEnquiries'] as int? ?? 0,
+        images: (json['images'] as List?)?.map((e) => e as String).toList() ?? const [],
       );
 }
 

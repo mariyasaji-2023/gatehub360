@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../models/property_listing.dart';
 import '../models/rent_payment.dart';
@@ -214,6 +216,10 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
   // would see, plus a box to link up if they already have a join code. ---
   List<Widget> _buildBrowseView(MyPropertyListing d) {
     return [
+      if (d.images.isNotEmpty) ...[
+        _PhotoGallery(images: d.images),
+        const SizedBox(height: 20),
+      ],
       Container(
         padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
@@ -306,6 +312,10 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
   // (asking price, big Contact Owner CTA) that doesn't apply anymore. ---
   List<Widget> _buildRentalView(MyPropertyListing d, MyRental rental) {
     return [
+      if (d.images.isNotEmpty) ...[
+        _PhotoGallery(images: d.images),
+        const SizedBox(height: 20),
+      ],
       DarkCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -510,6 +520,28 @@ class _EnquiryDialogState extends State<_EnquiryDialog> {
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
         ElevatedButton(onPressed: _submit, child: const Text('Notify Owner')),
       ],
+    );
+  }
+}
+
+/// Horizontal, swipeable strip of the property's photos.
+class _PhotoGallery extends StatelessWidget {
+  final List<String> images;
+  const _PhotoGallery({required this.images});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: 200,
+        child: PageView(
+          children: [
+            for (final img in images)
+              Image.memory(base64Decode(img), fit: BoxFit.cover, width: double.infinity),
+          ],
+        ),
+      ),
     );
   }
 }

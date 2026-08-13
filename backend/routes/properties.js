@@ -14,6 +14,23 @@ const { dueMonths, isCurrentMonth } = require('../utils/rentDues');
 
 const router = express.Router();
 
+// Property photos are stored inline as base64 strings (see models/Property.js)
+// rather than in external file storage, so cap how many/how large to keep
+// documents and request payloads reasonable.
+const MAX_IMAGES = 6;
+const MAX_IMAGE_LENGTH = 2_000_000; // ~1.5MB decoded, base64-encoded
+
+function validateImages(images) {
+  if (images === undefined) return { valid: true, images: undefined };
+  if (!Array.isArray(images)) return { valid: false, message: 'Images must be a list' };
+  if (images.length > MAX_IMAGES) return { valid: false, message: `You can add up to ${MAX_IMAGES} photos` };
+  for (const img of images) {
+    if (typeof img !== 'string' || !img) return { valid: false, message: 'Invalid photo data' };
+    if (img.length > MAX_IMAGE_LENGTH) return { valid: false, message: 'One of the photos is too large' };
+  }
+  return { valid: true, images };
+}
+
 // Shared by POST /:id/tenants and the join-request approval route below -
 // both end up creating the same kind of Tenant record. joinCode collisions
 // are rare (6 chars, 32-char alphabet) but the unique index can still
@@ -79,7 +96,7 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(403).json({ message: 'Only property owners can add properties' });
   }
 
-  const { type, mode, title, location, price, bhk, sqft, about, contact, active } = req.body;
+  const { type, mode, title, location, price, bhk, sqft, about, contact, active, images } = req.body;
   if (!Property.TYPES.includes(type)) {
     return res.status(400).json({ message: 'Invalid property type' });
   }
@@ -91,6 +108,10 @@ router.post('/', requireAuth, async (req, res) => {
   }
   if (!title || !location || !price || !sqft || !about || !contact) {
     return res.status(400).json({ message: 'All fields are required' });
+  }
+  const imagesCheck = validateImages(images);
+  if (!imagesCheck.valid) {
+    return res.status(400).json({ message: imagesCheck.message });
   }
 
   const property = await Property.create({
@@ -105,6 +126,7 @@ router.post('/', requireAuth, async (req, res) => {
     about,
     contact,
     active: active ?? true,
+    images: imagesCheck.images ?? [],
   });
   res.status(201).json({ property });
 });
@@ -115,7 +137,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     return res.status(404).json({ message: 'Property not found' });
   }
 
-  const { type, mode, title, location, price, bhk, sqft, about, contact, active } = req.body;
+  const { type, mode, title, location, price, bhk, sqft, about, contact, active, images } = req.body;
   if (type !== undefined) {
     if (!Property.TYPES.includes(type)) return res.status(400).json({ message: 'Invalid property type' });
     property.type = type;
@@ -135,6 +157,11 @@ router.patch('/:id', requireAuth, async (req, res) => {
   if (about !== undefined) property.about = about;
   if (contact !== undefined) property.contact = contact;
   if (active !== undefined) property.active = active;
+  if (images !== undefined) {
+    const imagesCheck = validateImages(images);
+    if (!imagesCheck.valid) return res.status(400).json({ message: imagesCheck.message });
+    property.images = imagesCheck.images;
+  }
 
   await property.save();
   res.json({ property });

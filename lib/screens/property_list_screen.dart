@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../data/listings_data.dart';
 import '../models/property_listing.dart';
@@ -198,13 +200,24 @@ class _PropertyCard extends StatelessWidget {
             children: [
               Stack(
                 children: [
-                  EmojiTile(
-                    emoji: p.emoji,
-                    color: AppColors.brand,
-                    height: 96,
-                    fontSize: 34,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  ),
+                  if (p.images.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                      child: Image.memory(
+                        base64Decode(p.images.first),
+                        height: 96,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  else
+                    EmojiTile(
+                      emoji: p.emoji,
+                      color: AppColors.brand,
+                      height: 96,
+                      fontSize: 34,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    ),
                   Positioned(
                     top: 10,
                     left: 10,

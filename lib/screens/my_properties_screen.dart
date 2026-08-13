@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/property_listing.dart';
 import '../services/auth_service.dart';
 import '../services/property_api.dart';
@@ -9,6 +12,9 @@ import 'property_dashboard_screen.dart';
 const _propertyTypes = ['Apartment', 'Villa', 'Plot', 'Commercial'];
 const _propertyModes = ['Buy', 'Rent', 'Sell', 'Commercial'];
 const _propertyBhks = ['1 BHK', '2 BHK', '3 BHK', '4 BHK', 'N/A'];
+
+// Keep in sync with MAX_IMAGES in backend/routes/properties.js.
+const _maxPropertyImages = 6;
 
 class MyPropertiesScreen extends StatefulWidget {
   const MyPropertiesScreen({super.key});
@@ -77,6 +83,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
           about: result.about,
           contact: result.contact,
           active: result.active,
+          images: result.images,
         );
       } else {
         await PropertyApi.update(
@@ -91,6 +98,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
           about: result.about,
           contact: result.contact,
           active: result.active,
+          images: result.images,
         );
       }
       await _load();
@@ -183,7 +191,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
                           children: [
                             Row(
                               children: [
-                                Text(l.emoji, style: const TextStyle(fontSize: 30)),
+                                _PropertyThumb(listing: l),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
@@ -257,6 +265,30 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
   }
 }
 
+/// Small preview tile used on the "My Properties" list — the first added
+/// photo if there is one, otherwise the type emoji as before.
+class _PropertyThumb extends StatelessWidget {
+  final MyPropertyListing listing;
+  const _PropertyThumb({required this.listing});
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 44.0;
+    if (listing.images.isEmpty) {
+      return Text(listing.emoji, style: const TextStyle(fontSize: 30));
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Image.memory(
+        base64Decode(listing.images.first),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+      ),
+    );
+  }
+}
+
 class _PropertyFormResult {
   final String type;
   final String mode;
@@ -268,6 +300,7 @@ class _PropertyFormResult {
   final String about;
   final String contact;
   final bool active;
+  final List<String> images;
 
   const _PropertyFormResult({
     required this.type,
@@ -280,6 +313,7 @@ class _PropertyFormResult {
     required this.about,
     required this.contact,
     required this.active,
+    required this.images,
   });
 }
 
@@ -303,6 +337,8 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
   late final _aboutController = TextEditingController(text: widget.existing?.about ?? '');
   late final _contactController = TextEditingController(text: widget.existing?.contact ?? '');
   late bool _active = widget.existing?.active ?? true;
+  late List<String> _images = List<String>.from(widget.existing?.images ?? const []);
+  bool _pickingImages = false;
 
   @override
   void dispose() {
@@ -313,6 +349,38 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
     _aboutController.dispose();
     _contactController.dispose();
     super.dispose();
+  }
+
+  Future<void> _addPhotos() async {
+    final remaining = _maxPropertyImages - _images.length;
+    if (remaining <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('You can add up to $_maxPropertyImages photos')));
+      return;
+    }
+    setState(() => _pickingImages = true);
+    try {
+      final picked = await ImagePicker().pickMultiImage(imageQuality: 70, maxWidth: 1280);
+      if (picked.isEmpty) return;
+      final encoded = <String>[];
+      for (final file in picked.take(remaining)) {
+        final bytes = await file.readAsBytes();
+        encoded.add(base64Encode(bytes));
+      }
+      if (!mounted) return;
+      setState(() => _images = [..._images, ...encoded]);
+      if (picked.length > remaining) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Only added $remaining — max $_maxPropertyImages photos per property')));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not add photos: $e')));
+    } finally {
+      if (mounted) setState(() => _pickingImages = false);
+    }
+  }
+
+  void _removePhoto(int index) {
+    setState(() => _images = [..._images]..removeAt(index));
   }
 
   void _save() {
@@ -328,6 +396,7 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
       about: _aboutController.text.trim(),
       contact: _contactController.text.trim(),
       active: _active,
+      images: _images,
     ));
   }
 
@@ -378,6 +447,16 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
                   controller: _titleController,
                   decoration: const InputDecoration(labelText: 'Title (e.g. Prestige Lakeside Habitat)'),
                   validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 14),
+                Text('Photos', style: AppFonts.heading(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                _PhotoPicker(
+                  images: _images,
+                  loading: _pickingImages,
+                  maxImages: _maxPropertyImages,
+                  onAdd: _addPhotos,
+                  onRemove: _removePhoto,
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
@@ -446,6 +525,84 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Row of added-photo thumbnails (each removable) plus an "Add" tile,
+/// used inside the Add/Edit Property form.
+class _PhotoPicker extends StatelessWidget {
+  final List<String> images;
+  final bool loading;
+  final int maxImages;
+  final VoidCallback onAdd;
+  final void Function(int index) onRemove;
+
+  const _PhotoPicker({
+    required this.images,
+    required this.loading,
+    required this.maxImages,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const tileSize = 76.0;
+    return SizedBox(
+      height: tileSize,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (var i = 0; i < images.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.memory(
+                      base64Decode(images[i]),
+                      width: tileSize,
+                      height: tileSize,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    top: -6,
+                    right: -6,
+                    child: GestureDetector(
+                      onTap: () => onRemove(i),
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(color: AppColors.danger, shape: BoxShape.circle),
+                        child: const Icon(Icons.close, size: 14, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (images.length < maxImages)
+            InkWell(
+              onTap: loading ? null : onAdd,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: tileSize,
+                height: tileSize,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                  color: AppColors.surfaceAlt,
+                ),
+                child: loading
+                    ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                    : const Icon(Icons.add_a_photo_outlined, color: AppColors.muted),
+              ),
+            ),
+        ],
       ),
     );
   }

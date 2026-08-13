@@ -64,8 +64,10 @@ const _tenantTypeOptions = <(String, String)>[
 /// as two tabs (Tenant Details / Stay Details) to match the reference
 /// design — fields backed by real data are fully functional; a few that
 /// would need infrastructure this app doesn't have yet (contacts picker,
-/// WhatsApp sending, per-meter electricity tracking, staff "Booked By")
-/// are shown but marked "Coming soon".
+/// WhatsApp sending, per-meter electricity tracking) are shown but marked
+/// "Coming soon". "Booked By" (which staff member handled it) was dropped
+/// entirely rather than stubbed, since this app has no staff/team concept
+/// at all - not even a "coming soon" placeholder made sense for it.
 class AddTenantScreen extends StatefulWidget {
   final String propertyId;
   final String? propertyTitle;
@@ -645,7 +647,6 @@ class _AddTenantScreenState extends State<AddTenantScreen> with SingleTickerProv
             },
           ),
           _row(label: 'Other Details', value: _editableTextValue(_otherDetails, hint: 'Other Details'), onTap: _editOtherDetails),
-          _stubRow('Booked By'),
         ]),
         const SizedBox(height: 14),
         _group([

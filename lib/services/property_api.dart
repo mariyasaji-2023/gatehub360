@@ -42,6 +42,7 @@ class PropertyApi {
     required String about,
     required String contact,
     bool active = true,
+    List<String> images = const [],
   }) async {
     final response = await _post('/properties', {
       'type': type,
@@ -54,6 +55,7 @@ class PropertyApi {
       'about': about,
       'contact': contact,
       'active': active,
+      'images': images,
     });
     return MyPropertyListing.fromJson(_decode(response)['property'] as Map<String, dynamic>);
   }
@@ -70,6 +72,7 @@ class PropertyApi {
     String? about,
     String? contact,
     bool? active,
+    List<String>? images,
   }) async {
     final response = await _patch('/properties/$id', {
       if (type != null) 'type': type,
@@ -82,6 +85,7 @@ class PropertyApi {
       if (about != null) 'about': about,
       if (contact != null) 'contact': contact,
       if (active != null) 'active': active,
+      if (images != null) 'images': images,
     });
     return MyPropertyListing.fromJson(_decode(response)['property'] as Map<String, dynamic>);
   }
