@@ -43,6 +43,15 @@ function validateVideoUrl(videoUrl) {
   return { valid: true, videoUrl };
 }
 
+function validateAmenities(amenities) {
+  if (amenities === undefined) return { valid: true, amenities: undefined };
+  if (!Array.isArray(amenities)) return { valid: false, message: 'Amenities must be a list' };
+  for (const a of amenities) {
+    if (!Property.AMENITIES.includes(a)) return { valid: false, message: `Invalid amenity: ${a}` };
+  }
+  return { valid: true, amenities: [...new Set(amenities)] };
+}
+
 // Shared by POST /:id/tenants and the join-request approval route below -
 // both end up creating the same kind of Tenant record. joinCode collisions
 // are rare (6 chars, 32-char alphabet) but the unique index can still
@@ -108,7 +117,7 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(403).json({ message: 'Only property owners can add properties' });
   }
 
-  const { type, mode, title, location, price, bhk, sqft, about, contact, active, images, videoUrl } = req.body;
+  const { type, mode, title, location, price, bhk, sqft, about, contact, active, images, videoUrl, amenities } = req.body;
   if (!Property.TYPES.includes(type)) {
     return res.status(400).json({ message: 'Invalid property type' });
   }
@@ -129,6 +138,10 @@ router.post('/', requireAuth, async (req, res) => {
   if (!videoCheck.valid) {
     return res.status(400).json({ message: videoCheck.message });
   }
+  const amenitiesCheck = validateAmenities(amenities);
+  if (!amenitiesCheck.valid) {
+    return res.status(400).json({ message: amenitiesCheck.message });
+  }
 
   const property = await Property.create({
     owner: req.user._id,
@@ -144,6 +157,7 @@ router.post('/', requireAuth, async (req, res) => {
     active: active ?? true,
     images: imagesCheck.images ?? [],
     videoUrl: videoCheck.videoUrl,
+    amenities: amenitiesCheck.amenities ?? [],
   });
   res.status(201).json({ property });
 });
@@ -154,7 +168,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     return res.status(404).json({ message: 'Property not found' });
   }
 
-  const { type, mode, title, location, price, bhk, sqft, about, contact, active, images, videoUrl } = req.body;
+  const { type, mode, title, location, price, bhk, sqft, about, contact, active, images, videoUrl, amenities } = req.body;
   if (type !== undefined) {
     if (!Property.TYPES.includes(type)) return res.status(400).json({ message: 'Invalid property type' });
     property.type = type;
@@ -183,6 +197,11 @@ router.patch('/:id', requireAuth, async (req, res) => {
     const videoCheck = validateVideoUrl(videoUrl);
     if (!videoCheck.valid) return res.status(400).json({ message: videoCheck.message });
     property.videoUrl = videoCheck.videoUrl;
+  }
+  if (amenities !== undefined) {
+    const amenitiesCheck = validateAmenities(amenities);
+    if (!amenitiesCheck.valid) return res.status(400).json({ message: amenitiesCheck.message });
+    property.amenities = amenitiesCheck.amenities;
   }
 
   await property.save();

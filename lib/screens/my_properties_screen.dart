@@ -16,8 +16,31 @@ const _propertyTypes = ['Apartment', 'Villa', 'Plot', 'Commercial'];
 const _propertyModes = ['Buy', 'Rent', 'Sell', 'Commercial'];
 const _propertyBhks = ['1 BHK', '2 BHK', '3 BHK', '4 BHK', 'N/A'];
 
+// Keep in sync with Property.AMENITIES in backend/models/Property.js.
+const _propertyAmenities = [
+  'Parking',
+  'Lift',
+  'Power Backup',
+  '24x7 Security',
+  'CCTV',
+  'Gym',
+  'Swimming Pool',
+  'Club House',
+  "Children's Play Area",
+  'Park/Garden',
+  'Water Supply',
+  'Gas Pipeline',
+  'Intercom',
+  'Fire Safety',
+  'Furnished',
+];
+
 // Keep in sync with MAX_IMAGES in backend/routes/properties.js.
 const _maxPropertyImages = 6;
+
+// A walkthrough clip doesn't need to be long, and keeping it short keeps
+// the (uncompressed) upload fast - see the comment in _pickVideo below.
+const _maxVideoDuration = Duration(seconds: 60);
 
 class MyPropertiesScreen extends StatefulWidget {
   const MyPropertiesScreen({super.key});
@@ -93,6 +116,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
           active: result.active,
           images: result.images,
           videoUrl: result.videoUrl,
+          amenities: result.amenities,
         );
       } else {
         await PropertyApi.update(
@@ -110,6 +134,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
           images: result.images,
           videoUrl: result.videoUrl,
           updateVideoUrl: true,
+          amenities: result.amenities,
         );
       }
       await _load();
@@ -338,6 +363,7 @@ class _PropertyFormResult {
   final bool active;
   final List<String> images;
   final String? videoUrl;
+  final List<String> amenities;
 
   const _PropertyFormResult({
     required this.type,
@@ -352,6 +378,7 @@ class _PropertyFormResult {
     required this.active,
     required this.images,
     required this.videoUrl,
+    required this.amenities,
   });
 }
 
@@ -378,7 +405,15 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
   late List<String> _images = List<String>.from(widget.existing?.images ?? const []);
   bool _pickingImages = false;
   late String? _videoUrl = widget.existing?.videoUrl;
-  bool _uploadingVideo = false;
+  // null = not uploading; 0-1 = in-progress upload fraction.
+  double? _videoUploadProgress;
+  late final Set<String> _amenities = Set<String>.from(widget.existing?.amenities ?? const []);
+
+  void _toggleAmenity(String amenity) {
+    setState(() {
+      if (!_amenities.remove(amenity)) _amenities.add(amenity);
+    });
+  }
 
   @override
   void dispose() {
@@ -392,19 +427,28 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
   }
 
   Future<void> _pickVideo() async {
-    final picked = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    // Uploads go straight from the phone at full quality - there's no
+    // on-device compression - so a longer clip can take a long time
+    // (or a lot of mobile data) to send. Capping the length keeps a
+    // "walkthrough" clip quick to pick, upload, and load for viewers too.
+    final picked = await ImagePicker().pickVideo(source: ImageSource.gallery, maxDuration: _maxVideoDuration);
     if (picked == null) return;
 
-    setState(() => _uploadingVideo = true);
+    setState(() => _videoUploadProgress = 0);
     try {
-      final url = await CloudinaryApi.uploadVideo(File(picked.path));
+      final url = await CloudinaryApi.uploadVideo(
+        File(picked.path),
+        onProgress: (p) {
+          if (mounted) setState(() => _videoUploadProgress = p);
+        },
+      );
       if (!mounted) return;
       setState(() => _videoUrl = url);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not upload video: $e')));
     } finally {
-      if (mounted) setState(() => _uploadingVideo = false);
+      if (mounted) setState(() => _videoUploadProgress = null);
     }
   }
 
@@ -457,6 +501,7 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
       active: _active,
       images: _images,
       videoUrl: _videoUrl,
+      amenities: _amenities.toList(),
     ));
   }
 
@@ -523,9 +568,29 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
                 const SizedBox(height: 8),
                 _VideoPicker(
                   videoUrl: _videoUrl,
-                  uploading: _uploadingVideo,
+                  uploadProgress: _videoUploadProgress,
                   onAdd: _pickVideo,
                   onRemove: _removeVideo,
+                ),
+                const SizedBox(height: 14),
+                Text('Amenities', style: AppFonts.heading(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final amenity in _propertyAmenities)
+                      FilterChip(
+                        label: Text(amenity),
+                        selected: _amenities.contains(amenity),
+                        onSelected: (_) => _toggleAmenity(amenity),
+                        labelStyle: TextStyle(fontSize: 12.5, color: _amenities.contains(amenity) ? AppColors.brandOnDark : AppColors.muted),
+                        selectedColor: AppColors.brand,
+                        backgroundColor: AppColors.surfaceAlt,
+                        side: BorderSide(color: _amenities.contains(amenity) ? AppColors.brand : AppColors.border),
+                        showCheckmark: false,
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
@@ -604,34 +669,39 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
 /// driven by the parent; this just reflects whatever state it's given.
 class _VideoPicker extends StatelessWidget {
   final String? videoUrl;
-  final bool uploading;
+  // null = not uploading; 0-1 = in-progress upload fraction.
+  final double? uploadProgress;
   final VoidCallback onAdd;
   final VoidCallback onRemove;
 
   const _VideoPicker({
     required this.videoUrl,
-    required this.uploading,
+    required this.uploadProgress,
     required this.onAdd,
     required this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (uploading) {
+    final progress = uploadProgress;
+    if (progress != null) {
       return Container(
         height: 56,
-        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border),
           color: AppColors.surfaceAlt,
         ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
-            SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-            SizedBox(width: 12),
-            Text('Uploading video…', style: TextStyle(fontSize: 13, color: AppColors.muted)),
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, value: progress > 0 ? progress : null),
+            ),
+            const SizedBox(width: 12),
+            Text('Uploading video… ${(progress * 100).round()}%', style: const TextStyle(fontSize: 13, color: AppColors.muted)),
           ],
         ),
       );
@@ -642,14 +712,14 @@ class _VideoPicker extends StatelessWidget {
       return OutlinedButton.icon(
         onPressed: onAdd,
         icon: const Icon(Icons.videocam_outlined, size: 18),
-        label: const Text('Add a walkthrough video'),
+        label: Text('Add a walkthrough video (up to ${_maxVideoDuration.inSeconds}s)'),
       );
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        PropertyVideoPlayer(videoUrl: url),
+        PropertyVideoPlayer(videoUrl: url, size: 110),
         const SizedBox(height: 8),
         Row(
           children: [

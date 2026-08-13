@@ -3,6 +3,23 @@ const mongoose = require('mongoose');
 const TYPES = ['Apartment', 'Villa', 'Plot', 'Commercial'];
 const MODES = ['Buy', 'Rent', 'Sell', 'Commercial'];
 const BHKS = ['1 BHK', '2 BHK', '3 BHK', '4 BHK', 'N/A'];
+const AMENITIES = [
+  'Parking',
+  'Lift',
+  'Power Backup',
+  '24x7 Security',
+  'CCTV',
+  'Gym',
+  'Swimming Pool',
+  'Club House',
+  "Children's Play Area",
+  'Park/Garden',
+  'Water Supply',
+  'Gas Pipeline',
+  'Intercom',
+  'Fire Safety',
+  'Furnished',
+];
 
 const propertySchema = new mongoose.Schema(
   {
@@ -27,6 +44,7 @@ const propertySchema = new mongoose.Schema(
     // app uploads it straight to Cloudinary and only the resulting hosted
     // URL is saved here.
     videoUrl: { type: String, default: null, trim: true },
+    amenities: { type: [String], enum: AMENITIES, default: [] },
     // Floor names the owner has added for vacancy management (e.g. "Ground
     // Floor", "1st Floor") - order as added, individual Units reference these
     // by name rather than a separate Floor collection.
@@ -40,5 +58,6 @@ const Property = mongoose.model('Property', propertySchema);
 Property.TYPES = TYPES;
 Property.MODES = MODES;
 Property.BHKS = BHKS;
+Property.AMENITIES = AMENITIES;
 
 module.exports = Property;

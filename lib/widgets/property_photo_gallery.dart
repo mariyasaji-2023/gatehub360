@@ -2,15 +2,18 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'property_video_player.dart';
 
 /// Horizontal, swipeable strip of a property's photos with a dot indicator
 /// so it reads as scrollable even with the images cut off at the edge.
-/// Tapping a photo opens it full-screen, uncropped. Used on both the
-/// buyer/tenant-facing property detail page and the owner's property
-/// dashboard.
+/// Tapping a photo opens it full-screen, uncropped. If a walkthrough video
+/// is present, it's appended as one more (playable) slide after the photos,
+/// rather than shown as a separate block. Used on both the buyer/tenant-
+/// facing property detail page and the owner's property dashboard.
 class PropertyPhotoGallery extends StatefulWidget {
   final List<String> images;
-  const PropertyPhotoGallery({super.key, required this.images});
+  final String? videoUrl;
+  const PropertyPhotoGallery({super.key, required this.images, this.videoUrl});
 
   @override
   State<PropertyPhotoGallery> createState() => _PropertyPhotoGalleryState();
@@ -36,6 +39,8 @@ class _PropertyPhotoGalleryState extends State<PropertyPhotoGallery> {
   @override
   Widget build(BuildContext context) {
     final images = widget.images;
+    final video = widget.videoUrl;
+    final pageCount = images.length + (video != null ? 1 : 0);
     return Stack(
       alignment: Alignment.bottomCenter,
       children: [
@@ -52,17 +57,18 @@ class _PropertyPhotoGalleryState extends State<PropertyPhotoGallery> {
                     onTap: () => _openFullScreen(i),
                     child: Image.memory(base64Decode(images[i]), fit: BoxFit.cover, width: double.infinity),
                   ),
+                if (video != null) PropertyVideoPlayer(videoUrl: video, height: 200),
               ],
             ),
           ),
         ),
-        if (images.length > 1)
+        if (pageCount > 1)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                for (var i = 0; i < images.length; i++)
+                for (var i = 0; i < pageCount; i++)
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 3),
                     width: i == _page ? 16 : 6,

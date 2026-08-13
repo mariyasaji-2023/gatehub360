@@ -24,6 +24,7 @@ class MyPropertyListing {
   final List<String> images;
   // Hosted Cloudinary URL of the owner's walkthrough video, if they added one.
   final String? videoUrl;
+  final List<String> amenities;
 
   const MyPropertyListing({
     required this.id,
@@ -40,6 +41,7 @@ class MyPropertyListing {
     this.unreadEnquiries = 0,
     this.images = const [],
     this.videoUrl,
+    this.amenities = const [],
   });
 
   String get emoji => emojiForPropertyType(type);
@@ -59,6 +61,7 @@ class MyPropertyListing {
         unreadEnquiries: json['unreadEnquiries'] as int? ?? 0,
         images: (json['images'] as List?)?.map((e) => e as String).toList() ?? const [],
         videoUrl: json['videoUrl'] as String?,
+        amenities: (json['amenities'] as List?)?.map((e) => e as String).toList() ?? const [],
       );
 }
 

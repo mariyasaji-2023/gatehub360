@@ -5,10 +5,10 @@ import '../services/auth_service.dart' show ApiException;
 import '../services/property_api.dart';
 import '../services/rent_api.dart';
 import '../theme/app_theme.dart';
+import '../widgets/amenities_card.dart';
 import '../widgets/dark_card.dart';
 import '../widgets/pill_badge.dart';
 import '../widgets/property_photo_gallery.dart';
-import '../widgets/property_video_player.dart';
 import '../widgets/razorpay_payment_sheet.dart';
 
 Color _modeColor(String mode) => switch (mode) {
@@ -216,12 +216,8 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
   // would see, plus a box to link up if they already have a join code. ---
   List<Widget> _buildBrowseView(MyPropertyListing d) {
     return [
-      if (d.images.isNotEmpty) ...[
-        PropertyPhotoGallery(images: d.images),
-        const SizedBox(height: 20),
-      ],
-      if (d.videoUrl != null) ...[
-        PropertyVideoPlayer(videoUrl: d.videoUrl!),
+      if (d.images.isNotEmpty || d.videoUrl != null) ...[
+        PropertyPhotoGallery(images: d.images, videoUrl: d.videoUrl),
         const SizedBox(height: 20),
       ],
       Container(
@@ -276,6 +272,10 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
           ],
         ),
       ),
+      if (d.amenities.isNotEmpty) ...[
+        const SizedBox(height: 20),
+        AmenitiesCard(amenities: d.amenities),
+      ],
       const SizedBox(height: 20),
       DarkCard(
         borderColor: AppColors.brand.withValues(alpha: 0.3),
@@ -316,12 +316,8 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
   // (asking price, big Contact Owner CTA) that doesn't apply anymore. ---
   List<Widget> _buildRentalView(MyPropertyListing d, MyRental rental) {
     return [
-      if (d.images.isNotEmpty) ...[
-        PropertyPhotoGallery(images: d.images),
-        const SizedBox(height: 20),
-      ],
-      if (d.videoUrl != null) ...[
-        PropertyVideoPlayer(videoUrl: d.videoUrl!),
+      if (d.images.isNotEmpty || d.videoUrl != null) ...[
+        PropertyPhotoGallery(images: d.images, videoUrl: d.videoUrl),
         const SizedBox(height: 20),
       ],
       DarkCard(
@@ -460,6 +456,10 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
           ],
         ),
       ),
+      if (d.amenities.isNotEmpty) ...[
+        const SizedBox(height: 20),
+        AmenitiesCard(amenities: d.amenities),
+      ],
     ];
   }
 
@@ -531,3 +531,4 @@ class _EnquiryDialogState extends State<_EnquiryDialog> {
     );
   }
 }
+

@@ -5,9 +5,9 @@ import '../models/rent_payment.dart';
 import '../services/auth_service.dart';
 import '../services/property_api.dart';
 import '../theme/app_theme.dart';
+import '../widgets/amenities_card.dart';
 import '../widgets/empty_state_section_card.dart';
 import '../widgets/property_photo_gallery.dart';
-import '../widgets/property_video_player.dart';
 import '../widgets/quick_actions_section.dart';
 import '../widgets/stat_overview_bar.dart';
 import 'add_property_complaint_screen.dart';
@@ -196,15 +196,10 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
       appBar: AppBar(title: Text(widget.listing.title)),
       body: ListView(
         children: [
-          if (widget.listing.images.isNotEmpty)
+          if (widget.listing.images.isNotEmpty || widget.listing.videoUrl != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: PropertyPhotoGallery(images: widget.listing.images),
-            ),
-          if (widget.listing.videoUrl != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-              child: PropertyVideoPlayer(videoUrl: widget.listing.videoUrl!),
+              child: PropertyPhotoGallery(images: widget.listing.images, videoUrl: widget.listing.videoUrl),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
@@ -223,6 +218,13 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
           StatOverviewBar(items: _overviewItems(_rentSummary, _vacancy, _openComplaints, _openComplaintsList)),
           QuickActionsSection(actions: _quickActions),
           hasUnits ? _buildOccupancyCard() : _buildEmptyOccupancyCard(),
+          if (widget.listing.amenities.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: AmenitiesCard(amenities: widget.listing.amenities),
+            ),
+          ],
           const SizedBox(height: 20),
         ],
       ),

@@ -44,6 +44,7 @@ class PropertyApi {
     bool active = true,
     List<String> images = const [],
     String? videoUrl,
+    List<String> amenities = const [],
   }) async {
     final response = await _post('/properties', {
       'type': type,
@@ -58,6 +59,7 @@ class PropertyApi {
       'active': active,
       'images': images,
       'videoUrl': videoUrl,
+      'amenities': amenities,
     });
     return MyPropertyListing.fromJson(_decode(response)['property'] as Map<String, dynamic>);
   }
@@ -80,6 +82,7 @@ class PropertyApi {
     // nullable param can't tell those apart, so this flag does.
     String? videoUrl,
     bool updateVideoUrl = false,
+    List<String>? amenities,
   }) async {
     final response = await _patch('/properties/$id', {
       if (type != null) 'type': type,
@@ -94,6 +97,7 @@ class PropertyApi {
       if (active != null) 'active': active,
       if (images != null) 'images': images,
       if (updateVideoUrl) 'videoUrl': videoUrl,
+      if (amenities != null) 'amenities': amenities,
     });
     return MyPropertyListing.fromJson(_decode(response)['property'] as Map<String, dynamic>);
   }
