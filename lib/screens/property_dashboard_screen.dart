@@ -15,6 +15,7 @@ import 'add_property_complaint_screen.dart';
 import 'add_rooms_screen.dart';
 import 'add_tenant_screen.dart';
 import 'collect_payment_screen.dart';
+import 'maintenance_screen.dart';
 import 'property_announcements_screen.dart';
 import 'property_complaints_screen.dart';
 import 'property_units_screen.dart';
@@ -164,6 +165,12 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
     setState(() => _rentSummary = rentSummary);
   }
 
+  Future<void> _openMaintenance() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => MaintenanceScreen(propertyId: widget.listing.id)),
+    );
+  }
+
   Future<void> _openAddRooms() async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddRoomsScreen(propertyId: widget.listing.id)));
     final vacancy = await _loadVacancy();
@@ -224,6 +231,7 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
         QuickAction(icon: Icons.groups_outlined, label: 'Tenants', onTap: _openTenants),
         QuickAction(icon: Icons.report_problem_outlined, label: 'Add Complaint', onTap: _openAddComplaint),
         QuickAction(icon: Icons.request_page_outlined, label: 'Collect Payment', onTap: _openCollectPayment),
+        QuickAction(icon: Icons.home_repair_service_outlined, label: 'Maintenance', onTap: _openMaintenance),
         QuickAction(icon: Icons.campaign_outlined, label: 'Send Announcement', onTap: _openAnnouncements),
         QuickAction(icon: Icons.map_outlined, label: 'Property Address', onTap: _openAddress),
         QuickAction(icon: Icons.check_circle_outline, label: 'Amenities', onTap: _showAmenities),

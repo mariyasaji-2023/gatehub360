@@ -204,6 +204,7 @@ class PropertyApi {
     String? email,
     String? roomNumber,
     required num monthlyRent,
+    num? maintenanceAmount,
     required DateTime moveInDate,
     String? altPhone,
     DateTime? moveOutDate,
@@ -224,6 +225,7 @@ class PropertyApi {
       if (email != null && email.isNotEmpty) 'email': email,
       if (roomNumber != null && roomNumber.isNotEmpty) 'roomNumber': roomNumber,
       'monthlyRent': monthlyRent,
+      if (maintenanceAmount != null) 'maintenanceAmount': maintenanceAmount,
       'moveInDate': moveInDate.toIso8601String(),
       if (altPhone != null && altPhone.isNotEmpty) 'altPhone': altPhone,
       if (moveOutDate != null) 'moveOutDate': moveOutDate.toIso8601String(),
@@ -252,6 +254,8 @@ class PropertyApi {
     DateTime? moveOutDate,
     bool updateMoveOutDate = false,
     String? status,
+    num? maintenanceAmount,
+    bool updateMaintenanceAmount = false,
     String? kycDocumentUrl,
     bool updateKycDocumentUrl = false,
     String? rentalAgreementUrl,
@@ -260,6 +264,7 @@ class PropertyApi {
     final response = await _patch('/properties/$propertyId/tenants/$tenantId', {
       if (updateMoveOutDate) 'moveOutDate': moveOutDate?.toIso8601String(),
       if (status != null) 'status': status,
+      if (updateMaintenanceAmount) 'maintenanceAmount': maintenanceAmount,
       if (updateKycDocumentUrl) 'kycDocumentUrl': kycDocumentUrl,
       if (updateRentalAgreementUrl) 'rentalAgreementUrl': rentalAgreementUrl,
     });
@@ -405,6 +410,36 @@ class PropertyApi {
   /// Dashboard-level rent aggregate for one property.
   static Future<RentSummary> fetchRentSummary(String propertyId) async {
     final response = await _get('/properties/$propertyId/rent-summary');
+    return RentSummary.fromJson(_decode(response));
+  }
+
+  // --- Maintenance collection (owner side) — same shapes as rent, just
+  // against a separate maintenance amount/ledger. Reuses TenantRentDetail/
+  // RentSummary since the JSON shape is identical. ---
+
+  static Future<TenantRentDetail> fetchTenantMaintenance(String propertyId, String tenantId) async {
+    final response = await _get('/properties/$propertyId/tenants/$tenantId/maintenance');
+    return TenantRentDetail.fromJson(_decode(response));
+  }
+
+  static Future<RentPaymentRecord> collectMaintenanceManually(
+    String propertyId,
+    String tenantId, {
+    required int month,
+    required int year,
+    required String method,
+  }) async {
+    final response = await _patch('/properties/$propertyId/tenants/$tenantId/maintenance', {
+      'month': month,
+      'year': year,
+      'method': method,
+    });
+    return RentPaymentRecord.fromJson(_decode(response)['payment'] as Map<String, dynamic>);
+  }
+
+  /// Dashboard-level maintenance aggregate for one property.
+  static Future<RentSummary> fetchMaintenanceSummary(String propertyId) async {
+    final response = await _get('/properties/$propertyId/maintenance-summary');
     return RentSummary.fromJson(_decode(response));
   }
 

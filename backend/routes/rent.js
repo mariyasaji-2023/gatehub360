@@ -2,6 +2,7 @@ const express = require('express');
 const requireAuth = require('../middleware/auth');
 const Tenant = require('../models/Tenant');
 const RentPayment = require('../models/RentPayment');
+const MaintenancePayment = require('../models/MaintenancePayment');
 const Property = require('../models/Property');
 const Announcement = require('../models/Announcement');
 const PropertyComplaint = require('../models/PropertyComplaint');
@@ -32,6 +33,12 @@ router.get('/', requireAuth, async (req, res) => {
     tenants.map(async (tenant) => {
       const payments = await RentPayment.find({ tenant: tenant._id }).sort({ year: -1, month: -1 });
       const due = dueMonths(tenant.moveInDate, payments).map((m) => ({ ...m, amount: tenant.monthlyRent }));
+
+      const maintenancePayments = await MaintenancePayment.find({ tenant: tenant._id }).sort({ year: -1, month: -1 });
+      const maintenanceDue = tenant.maintenanceAmount > 0
+        ? dueMonths(tenant.moveInDate, maintenancePayments).map((m) => ({ ...m, amount: tenant.maintenanceAmount }))
+        : [];
+
       return {
         tenantId: tenant._id,
         property: tenant.property,
@@ -40,6 +47,9 @@ router.get('/', requireAuth, async (req, res) => {
         moveInDate: tenant.moveInDate,
         due,
         payments,
+        maintenanceAmount: tenant.maintenanceAmount,
+        maintenanceDue,
+        maintenancePayments,
       };
     })
   );
@@ -134,6 +144,58 @@ router.post('/:tenantId/pay', requireAuth, async (req, res) => {
       }
     } catch (notifyErr) {
       console.error('Failed to send rent payment push notification:', notifyErr.message);
+    }
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ message: 'That month is already marked paid' });
+    }
+    throw err;
+  }
+});
+
+// Same as POST /:tenantId/pay above, against MaintenancePayment instead of
+// RentPayment - called after the client has already run the Razorpay
+// checkout + signature verification.
+router.post('/:tenantId/maintenance/pay', requireAuth, async (req, res) => {
+  const tenant = await Tenant.findOne({ _id: req.params.tenantId, linkedUser: req.user._id, status: 'active' });
+  if (!tenant) {
+    return res.status(404).json({ message: 'Tenant record not found for your account' });
+  }
+  if (!(tenant.maintenanceAmount > 0)) {
+    return res.status(400).json({ message: 'No maintenance amount set for this tenant' });
+  }
+
+  const { month, year, paymentId } = req.body;
+  if (!month || !year || !paymentId) {
+    return res.status(400).json({ message: 'Month, year, and paymentId are required' });
+  }
+
+  const property = await Property.findById(tenant.property);
+
+  try {
+    const payment = await MaintenancePayment.create({
+      tenant: tenant._id,
+      property: tenant.property,
+      owner: tenant.owner,
+      month,
+      year,
+      amount: tenant.maintenanceAmount,
+      method: 'online',
+      razorpayPaymentId: paymentId,
+    });
+    res.status(201).json({ payment, propertyTitle: property?.title });
+
+    try {
+      const owner = await User.findById(tenant.owner);
+      if (owner) {
+        await notifyOwner(owner, {
+          title: 'Maintenance received',
+          body: `${tenant.name} paid ₹${tenant.maintenanceAmount} maintenance for ${MONTH_NAMES[month - 1]} ${year} (${property?.title ?? 'your property'})`,
+          data: { type: 'maintenance_paid', propertyId: String(tenant.property), tenantId: String(tenant._id) },
+        });
+      }
+    } catch (notifyErr) {
+      console.error('Failed to send maintenance payment push notification:', notifyErr.message);
     }
   } catch (err) {
     if (err.code === 11000) {

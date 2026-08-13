@@ -5,6 +5,7 @@ const Enquiry = require('../models/Enquiry');
 const User = require('../models/User');
 const Tenant = require('../models/Tenant');
 const RentPayment = require('../models/RentPayment');
+const MaintenancePayment = require('../models/MaintenancePayment');
 const Unit = require('../models/Unit');
 const Announcement = require('../models/Announcement');
 const PropertyJoinRequest = require('../models/PropertyJoinRequest');
@@ -382,13 +383,24 @@ router.get('/:id/tenants', requireAuth, async (req, res) => {
   }
   const tenants = await Tenant.find({ property: property._id }).sort({ createdAt: -1 });
   const payments = await RentPayment.find({ property: property._id });
+  const maintenancePayments = await MaintenancePayment.find({ property: property._id });
 
-  // Cheap per-tenant rent status inline, so the Collect Payment list doesn't
-  // need a follow-up call per tenant just to show a paid/pending badge.
+  // Cheap per-tenant rent + maintenance status inline, so the Collect
+  // Payment / Maintenance lists don't need a follow-up call per tenant just
+  // to show a paid/pending badge. Maintenance is only "due" at all once the
+  // owner has set a maintenanceAmount > 0 for that tenant.
   const withRentStatus = tenants.map((t) => {
     const tenantPayments = payments.filter((p) => String(p.tenant) === String(t._id));
     const due = dueMonths(t.moveInDate, tenantPayments);
-    return { ...t.toObject(), pendingMonths: due.length, pendingAmount: due.length * t.monthlyRent };
+    const tenantMaintenancePayments = maintenancePayments.filter((p) => String(p.tenant) === String(t._id));
+    const maintenanceDue = t.maintenanceAmount > 0 ? dueMonths(t.moveInDate, tenantMaintenancePayments) : [];
+    return {
+      ...t.toObject(),
+      pendingMonths: due.length,
+      pendingAmount: due.length * t.monthlyRent,
+      pendingMaintenanceMonths: maintenanceDue.length,
+      pendingMaintenanceAmount: maintenanceDue.length * t.maintenanceAmount,
+    };
   });
   res.json({ tenants: withRentStatus });
 });
@@ -406,6 +418,7 @@ router.post('/:id/tenants', requireAuth, async (req, res) => {
     roomNumber,
     moveInDate,
     monthlyRent,
+    maintenanceAmount,
     altPhone,
     moveOutDate,
     stayType,
@@ -428,6 +441,9 @@ router.post('/:id/tenants', requireAuth, async (req, res) => {
   }
   if (typeof monthlyRent !== 'number' || monthlyRent <= 0) {
     return res.status(400).json({ message: 'Invalid monthly rent' });
+  }
+  if (maintenanceAmount !== undefined && maintenanceAmount !== null && (typeof maintenanceAmount !== 'number' || maintenanceAmount < 0)) {
+    return res.status(400).json({ message: 'Invalid maintenance amount' });
   }
   let parsedMoveOut;
   if (moveOutDate) {
@@ -452,6 +468,7 @@ router.post('/:id/tenants', requireAuth, async (req, res) => {
     roomNumber: roomNumber || undefined,
     moveInDate: parsedMoveIn,
     monthlyRent,
+    maintenanceAmount: maintenanceAmount ?? undefined,
     altPhone: altPhone || undefined,
     moveOutDate: parsedMoveOut,
     stayType: stayType || undefined,
@@ -489,6 +506,7 @@ router.patch('/:id/tenants/:tenantId', requireAuth, async (req, res) => {
     email,
     roomNumber,
     monthlyRent,
+    maintenanceAmount,
     altPhone,
     moveOutDate,
     status,
@@ -515,6 +533,12 @@ router.patch('/:id/tenants/:tenantId', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'Invalid monthly rent' });
     }
     tenant.monthlyRent = monthlyRent;
+  }
+  if (maintenanceAmount !== undefined) {
+    if (maintenanceAmount !== null && (typeof maintenanceAmount !== 'number' || maintenanceAmount < 0)) {
+      return res.status(400).json({ message: 'Invalid maintenance amount' });
+    }
+    tenant.maintenanceAmount = maintenanceAmount ?? 0;
   }
   if (altPhone !== undefined) tenant.altPhone = altPhone || undefined;
   if (moveOutDate !== undefined) {
@@ -945,6 +969,110 @@ router.get('/:id/rent-summary', requireAuth, async (req, res) => {
     const due = dueMonths(tenant.moveInDate, tenantPayments);
     allTimeDues += due.length * tenant.monthlyRent;
     if (due.some((d) => isCurrentMonth(d.month, d.year))) thisMonthDues += tenant.monthlyRent;
+  }
+
+  res.json({ todayCollection, thisMonthCollection, thisMonthDues, allTimeDues, activeTenants: tenants.length });
+});
+
+// --- Maintenance collection (owner side) ---
+//
+// Mirrors the rent collection routes above exactly, against
+// MaintenancePayment/tenant.maintenanceAmount instead of
+// RentPayment/tenant.monthlyRent - see that model's comment for why it's a
+// separate collection rather than a `type` flag on RentPayment.
+
+// One tenant's full maintenance picture: which months are still due, and
+// their paid history - powers the tenant detail view's "Maintenance"
+// section. If the owner hasn't set a maintenanceAmount for this tenant,
+// `due` is always empty rather than treating unset (0) as "owes nothing
+// forever paid up".
+router.get('/:id/tenants/:tenantId/maintenance', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const tenant = await Tenant.findOne({ _id: req.params.tenantId, property: property._id });
+  if (!tenant) {
+    return res.status(404).json({ message: 'Tenant not found' });
+  }
+
+  const payments = await MaintenancePayment.find({ tenant: tenant._id }).sort({ year: -1, month: -1 });
+  const due = tenant.maintenanceAmount > 0
+    ? dueMonths(tenant.moveInDate, payments).map((m) => ({ ...m, amount: tenant.maintenanceAmount }))
+    : [];
+
+  res.json({ tenant, due, payments });
+});
+
+// Owner records maintenance they collected themselves (cash/UPI/bank
+// transfer arranged outside the app) for one month.
+router.patch('/:id/tenants/:tenantId/maintenance', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const tenant = await Tenant.findOne({ _id: req.params.tenantId, property: property._id });
+  if (!tenant) {
+    return res.status(404).json({ message: 'Tenant not found' });
+  }
+  if (!(tenant.maintenanceAmount > 0)) {
+    return res.status(400).json({ message: 'Set a monthly maintenance amount for this tenant first' });
+  }
+
+  const { month, year, method } = req.body;
+  if (!month || !year) {
+    return res.status(400).json({ message: 'Month and year are required' });
+  }
+  if (!['cash', 'upi', 'bank_transfer'].includes(method)) {
+    return res.status(400).json({ message: 'Invalid collection method' });
+  }
+
+  try {
+    const payment = await MaintenancePayment.create({
+      tenant: tenant._id,
+      property: property._id,
+      owner: req.user._id,
+      month,
+      year,
+      amount: tenant.maintenanceAmount,
+      method,
+    });
+    res.status(201).json({ payment });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ message: 'That month is already marked paid' });
+    }
+    throw err;
+  }
+});
+
+// Dashboard aggregate across every active tenant of this property that has
+// a maintenance amount set - "Maintenance Reports".
+router.get('/:id/maintenance-summary', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+
+  const tenants = await Tenant.find({ property: property._id, status: 'active', maintenanceAmount: { $gt: 0 } });
+  const payments = await MaintenancePayment.find({ property: property._id });
+
+  let thisMonthCollection = 0;
+  let todayCollection = 0;
+  let thisMonthDues = 0;
+  let allTimeDues = 0;
+
+  const todayKey = new Date().toDateString();
+  for (const payment of payments) {
+    if (isCurrentMonth(payment.month, payment.year)) thisMonthCollection += payment.amount;
+    if (payment.paidAt && payment.paidAt.toDateString() === todayKey) todayCollection += payment.amount;
+  }
+
+  for (const tenant of tenants) {
+    const tenantPayments = payments.filter((p) => String(p.tenant) === String(tenant._id));
+    const due = dueMonths(tenant.moveInDate, tenantPayments);
+    allTimeDues += due.length * tenant.maintenanceAmount;
+    if (due.some((d) => isCurrentMonth(d.month, d.year))) thisMonthDues += tenant.maintenanceAmount;
   }
 
   res.json({ todayCollection, thisMonthCollection, thisMonthDues, allTimeDues, activeTenants: tenants.length });

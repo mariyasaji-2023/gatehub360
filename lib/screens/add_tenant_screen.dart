@@ -93,6 +93,7 @@ class _AddTenantScreenState extends State<AddTenantScreen> with SingleTickerProv
 
   // Stay Details
   final _rentController = TextEditingController();
+  final _maintenanceController = TextEditingController();
   final _depositController = TextEditingController();
   final _referredByController = TextEditingController();
   int _lockInMonths = 0;
@@ -146,6 +147,7 @@ class _AddTenantScreenState extends State<AddTenantScreen> with SingleTickerProv
     _altPhoneController.dispose();
     _roomController.dispose();
     _rentController.dispose();
+    _maintenanceController.dispose();
     _depositController.dispose();
     _referredByController.dispose();
     super.dispose();
@@ -246,6 +248,7 @@ class _AddTenantScreenState extends State<AddTenantScreen> with SingleTickerProv
         phone: _phoneController.text.trim(),
         roomNumber: _roomController.text.trim(),
         monthlyRent: num.parse(_rentController.text.trim()),
+        maintenanceAmount: _maintenanceController.text.trim().isEmpty ? null : num.tryParse(_maintenanceController.text.trim()),
         moveInDate: _moveInDate,
         altPhone: _altPhoneController.text.trim(),
         moveOutDate: _moveOutDate,
@@ -629,6 +632,10 @@ class _AddTenantScreenState extends State<AddTenantScreen> with SingleTickerProv
                 return (amount == null || amount <= 0) ? 'Enter a valid amount' : null;
               },
             ),
+          ),
+          _row(
+            label: 'Maintenance',
+            value: _textField(_maintenanceController, hint: '₹ Amount (optional)', keyboardType: TextInputType.number),
           ),
           _row(label: 'Security Deposit', value: _textField(_depositController, hint: '₹ Amount', keyboardType: TextInputType.number)),
         ]),

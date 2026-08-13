@@ -7,6 +7,8 @@ class Tenant {
   final String? email;
   final String? roomNumber;
   final num monthlyRent;
+  // 0 means no maintenance charge has been set for this tenant.
+  final num maintenanceAmount;
   final DateTime moveInDate;
   final DateTime? moveOutDate;
   final String status;
@@ -23,6 +25,8 @@ class Tenant {
   // follow-up call per tenant.
   final int? pendingMonths;
   final num? pendingAmount;
+  final int? pendingMaintenanceMonths;
+  final num? pendingMaintenanceAmount;
 
   // --- Stay details - all optional, filled in on the "Stay Details" tab
   // of AddTenantScreen (see backend/models/Tenant.js) ---
@@ -51,6 +55,7 @@ class Tenant {
     this.email,
     this.roomNumber,
     required this.monthlyRent,
+    this.maintenanceAmount = 0,
     required this.moveInDate,
     this.moveOutDate,
     required this.status,
@@ -58,6 +63,8 @@ class Tenant {
     this.isLinked,
     this.pendingMonths,
     this.pendingAmount,
+    this.pendingMaintenanceMonths,
+    this.pendingMaintenanceAmount,
     this.altPhone,
     this.stayType = 'long',
     this.lockInMonths,
@@ -76,6 +83,11 @@ class Tenant {
 
   bool get isFullyPaid => (pendingMonths ?? 0) == 0;
 
+  // No maintenance amount set at all reads as "nothing to track" rather
+  // than "fully paid" - callers should check maintenanceAmount > 0 first
+  // before showing a paid/pending badge for it.
+  bool get isMaintenanceFullyPaid => (pendingMaintenanceMonths ?? 0) == 0;
+
   factory Tenant.fromJson(Map<String, dynamic> json) => Tenant(
         id: json['_id'] as String,
         name: json['name'] as String,
@@ -83,6 +95,7 @@ class Tenant {
         email: json['email'] as String?,
         roomNumber: json['roomNumber'] as String?,
         monthlyRent: json['monthlyRent'] as num,
+        maintenanceAmount: json['maintenanceAmount'] as num? ?? 0,
         moveInDate: DateTime.parse(json['moveInDate'] as String),
         moveOutDate: json['moveOutDate'] != null ? DateTime.parse(json['moveOutDate'] as String) : null,
         status: json['status'] as String,
@@ -90,6 +103,8 @@ class Tenant {
         isLinked: json.containsKey('linkedUser') ? json['linkedUser'] != null : null,
         pendingMonths: json['pendingMonths'] as int?,
         pendingAmount: json['pendingAmount'] as num?,
+        pendingMaintenanceMonths: json['pendingMaintenanceMonths'] as int?,
+        pendingMaintenanceAmount: json['pendingMaintenanceAmount'] as num?,
         altPhone: json['altPhone'] as String?,
         stayType: json['stayType'] as String? ?? 'long',
         lockInMonths: json['lockInMonths'] as int?,

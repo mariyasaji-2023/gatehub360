@@ -10,6 +10,8 @@ import '../widgets/dark_card.dart';
 import '../widgets/pill_badge.dart';
 import '../widgets/property_photo_gallery.dart';
 import '../widgets/razorpay_payment_sheet.dart';
+import 'my_complaints_screen.dart';
+import 'raise_complaint_screen.dart';
 
 Color _modeColor(String mode) => switch (mode) {
       'Rent' => AppColors.amber,
@@ -30,6 +32,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
   MyRental? _rental;
   DueMonth? _paying;
   bool _payingAll = false;
+  DueMonth? _payingMaintenance;
   bool _joining = false;
 
   @override
@@ -135,6 +138,46 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
     }
   }
 
+  Future<void> _payMaintenance(DueMonth due) async {
+    final rental = _rental;
+    if (rental == null) return;
+    setState(() => _payingMaintenance = due);
+    final result = await showRazorpayCheckout(
+      context: context,
+      description: '${rental.propertyTitle} maintenance — ${due.label}',
+      amountLabel: due.amount.toString(),
+    );
+    if (!mounted) return;
+
+    if (result.outcome != PaymentOutcome.success) {
+      setState(() => _payingMaintenance = null);
+      if (result.outcome == PaymentOutcome.failed) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment failed. Please try again.')));
+      }
+      return;
+    }
+
+    try {
+      await RentApi.payMaintenance(rental.tenantId, month: due.month, year: due.year, paymentId: result.paymentId!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${due.label} paid')));
+      await _checkRental();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Payment succeeded but could not be recorded: $e')));
+    } finally {
+      if (mounted) setState(() => _payingMaintenance = null);
+    }
+  }
+
+  Future<void> _reportIssue() async {
+    final rental = _rental;
+    if (rental == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => RaiseComplaintScreen(tenantId: rental.tenantId, propertyTitle: rental.propertyTitle)),
+    );
+  }
+
   // One Razorpay checkout for the combined total, then a payRent call per
   // due month against that same paymentId — RentPayment's uniqueness is on
   // (tenant, month, year), not the paymentId, so reusing one payment across
@@ -200,7 +243,19 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
     final d = widget.property;
 
     return Scaffold(
-      appBar: AppBar(title: Text(d.title, overflow: TextOverflow.ellipsis)),
+      appBar: AppBar(
+        title: Text(d.title, overflow: TextOverflow.ellipsis),
+        actions: [
+          if (_rental != null)
+            IconButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const MyComplaintsScreen()),
+              ),
+              icon: const Icon(Icons.report_problem_outlined),
+              tooltip: 'My Complaints',
+            ),
+        ],
+      ),
       body: SafeArea(
         child: _checkingRental
             ? const Center(child: CircularProgressIndicator())
@@ -340,6 +395,15 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
             const Divider(color: AppColors.border, height: 1),
             const SizedBox(height: 14),
             Text('₹${rental.monthlyRent}/month', style: AppFonts.heading(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.brand)),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _reportIssue,
+                icon: const Icon(Icons.report_problem_outlined, size: 17),
+                label: const Text('Report an Issue'),
+              ),
+            ),
           ],
         ),
       ),
@@ -444,6 +508,93 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
               ),
             ),
           ),
+      ],
+      if (rental.maintenanceAmount > 0) ...[
+        const SizedBox(height: 20),
+        if (rental.maintenanceDue.isEmpty)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Maintenance', style: AppFonts.heading(fontSize: 15.5, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text("Nothing pending — you're fully paid up.", style: TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          )
+        else ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(child: Text('Maintenance', style: AppFonts.heading(fontSize: 15.5, fontWeight: FontWeight.w700))),
+              Text(
+                'Total ₹${rental.maintenanceDue.fold<num>(0, (sum, d) => sum + d.amount)}',
+                style: const TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final due in rental.maintenanceDue)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: DarkCard(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(due.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 2),
+                          Text('₹${due.amount}', style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      height: 36,
+                      width: 110,
+                      child: _payingMaintenance == due
+                          ? const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: CircularProgressIndicator(strokeWidth: 2))
+                          : ElevatedButton(
+                              onPressed: () => _payMaintenance(due),
+                              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16)),
+                              child: const Text('Pay Now', style: TextStyle(fontSize: 12.5)),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+        if (rental.maintenancePayments.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text('Maintenance History', style: AppFonts.heading(fontSize: 15.5, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 10),
+          for (final payment in rental.maintenancePayments)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: DarkCard(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(payment.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 2),
+                          Text('₹${payment.amount}', style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+                        ],
+                      ),
+                    ),
+                    PillBadge(label: payment.methodLabel, color: payment.method == 'online' ? AppColors.brand : AppColors.success),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ],
       const SizedBox(height: 20),
       DarkCard(

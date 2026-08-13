@@ -45,6 +45,10 @@ const tenantSchema = new mongoose.Schema(
     email: { type: String, trim: true },
     roomNumber: { type: String, trim: true },
     monthlyRent: { type: Number, required: true, min: 0 },
+    // Monthly maintenance/society charge, separate from rent - 0 means the
+    // owner hasn't set one, and dueMonths() is simply never run for it in
+    // that case (see routes/properties.js, routes/rent.js).
+    maintenanceAmount: { type: Number, min: 0, default: 0 },
     moveInDate: { type: Date, required: true },
     moveOutDate: { type: Date, default: null },
     status: { type: String, enum: STATUSES, default: 'active' },

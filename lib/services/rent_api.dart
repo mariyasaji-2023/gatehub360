@@ -55,6 +55,17 @@ class RentApi {
     _decode(response);
   }
 
+  /// Records a maintenance payment already completed + signature-verified,
+  /// same as [payRent] but against the tenant's maintenance ledger.
+  static Future<void> payMaintenance(String tenantId, {required int month, required int year, required String paymentId}) async {
+    final response = await _post('/my-rent/$tenantId/maintenance/pay', {
+      'month': month,
+      'year': year,
+      'paymentId': paymentId,
+    });
+    _decode(response);
+  }
+
   // --- Complaints (tenant side) ---
 
   /// Every complaint this tenant has raised, across every property they've

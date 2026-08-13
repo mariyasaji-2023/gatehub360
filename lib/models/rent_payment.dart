@@ -111,6 +111,11 @@ class MyRental {
   final num monthlyRent;
   final List<DueMonth> due;
   final List<RentPaymentRecord> payments;
+  // 0 means the owner hasn't set a maintenance charge for this tenant -
+  // maintenanceDue is always empty in that case, same as the backend.
+  final num maintenanceAmount;
+  final List<DueMonth> maintenanceDue;
+  final List<RentPaymentRecord> maintenancePayments;
 
   const MyRental({
     required this.tenantId,
@@ -121,6 +126,9 @@ class MyRental {
     required this.monthlyRent,
     required this.due,
     required this.payments,
+    this.maintenanceAmount = 0,
+    this.maintenanceDue = const [],
+    this.maintenancePayments = const [],
   });
 
   factory MyRental.fromJson(Map<String, dynamic> json) {
@@ -134,6 +142,13 @@ class MyRental {
       monthlyRent: json['monthlyRent'] as num,
       due: (json['due'] as List).map((d) => DueMonth.fromJson(d as Map<String, dynamic>)).toList(),
       payments: (json['payments'] as List).map((p) => RentPaymentRecord.fromJson(p as Map<String, dynamic>)).toList(),
+      maintenanceAmount: json['maintenanceAmount'] as num? ?? 0,
+      maintenanceDue: ((json['maintenanceDue'] as List?) ?? const [])
+          .map((d) => DueMonth.fromJson(d as Map<String, dynamic>))
+          .toList(),
+      maintenancePayments: ((json['maintenancePayments'] as List?) ?? const [])
+          .map((p) => RentPaymentRecord.fromJson(p as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

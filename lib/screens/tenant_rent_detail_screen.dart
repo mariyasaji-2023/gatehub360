@@ -28,9 +28,12 @@ class TenantRentDetailScreen extends StatefulWidget {
 
 class _TenantRentDetailScreenState extends State<TenantRentDetailScreen> {
   TenantRentDetail? _detail;
+  TenantRentDetail? _maintenanceDetail;
   bool _loading = true;
   String? _error;
   DueMonth? _collecting;
+  DueMonth? _collectingMaintenance;
+  bool _savingMaintenanceAmount = false;
   // null = not uploading; 0-1 = in-progress upload fraction.
   double? _kycUploadProgress;
   double? _agreementUploadProgress;
@@ -48,10 +51,14 @@ class _TenantRentDetailScreenState extends State<TenantRentDetailScreen> {
       _error = null;
     });
     try {
-      final detail = await PropertyApi.fetchTenantRent(widget.propertyId, widget.tenant.id);
+      final results = await Future.wait([
+        PropertyApi.fetchTenantRent(widget.propertyId, widget.tenant.id),
+        PropertyApi.fetchTenantMaintenance(widget.propertyId, widget.tenant.id),
+      ]);
       if (!mounted) return;
       setState(() {
-        _detail = detail;
+        _detail = results[0];
+        _maintenanceDetail = results[1];
         _loading = false;
       });
     } catch (e) {
@@ -81,6 +88,68 @@ class _TenantRentDetailScreenState extends State<TenantRentDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not record payment: $e')));
     } finally {
       if (mounted) setState(() => _collecting = null);
+    }
+  }
+
+  Future<void> _collectMaintenance(DueMonth due) async {
+    final method = await showModalBottomSheet<String>(
+      context: context,
+      builder: (_) => _MethodPickerSheet(due: due),
+    );
+    if (method == null) return;
+
+    setState(() => _collectingMaintenance = due);
+    try {
+      await PropertyApi.collectMaintenanceManually(widget.propertyId, widget.tenant.id, month: due.month, year: due.year, method: method);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${due.label} marked collected')));
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not record payment: $e')));
+    } finally {
+      if (mounted) setState(() => _collectingMaintenance = null);
+    }
+  }
+
+  Future<void> _editMaintenanceAmount() async {
+    final controller = TextEditingController(
+      text: (_maintenanceDetail?.tenant.maintenanceAmount ?? 0) > 0 ? '${_maintenanceDetail!.tenant.maintenanceAmount}' : '',
+    );
+    final amount = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Monthly Maintenance'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: '₹ Amount', hintText: 'Leave blank for no maintenance charge'),
+          onSubmitted: (v) => Navigator.of(context).pop(v),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (amount == null || !mounted) return;
+
+    setState(() => _savingMaintenanceAmount = true);
+    try {
+      await PropertyApi.updateTenant(
+        widget.propertyId,
+        widget.tenant.id,
+        maintenanceAmount: amount.trim().isEmpty ? 0 : num.tryParse(amount.trim()) ?? 0,
+        updateMaintenanceAmount: true,
+      );
+      if (!mounted) return;
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update maintenance amount: $e')));
+    } finally {
+      if (mounted) setState(() => _savingMaintenanceAmount = false);
     }
   }
 
@@ -165,7 +234,7 @@ class _TenantRentDetailScreenState extends State<TenantRentDetailScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? _buildError()
-              : RefreshIndicator(onRefresh: _load, child: _buildBody(_detail!)),
+              : RefreshIndicator(onRefresh: _load, child: _buildBody(_detail!, _maintenanceDetail!)),
     );
   }
 
@@ -185,7 +254,7 @@ class _TenantRentDetailScreenState extends State<TenantRentDetailScreen> {
     );
   }
 
-  Widget _buildBody(TenantRentDetail detail) {
+  Widget _buildBody(TenantRentDetail detail, TenantRentDetail maintenance) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       children: [
@@ -382,6 +451,91 @@ class _TenantRentDetailScreenState extends State<TenantRentDetailScreen> {
                 ),
               ),
             ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(child: Text('Maintenance', style: AppFonts.heading(fontSize: 15.5, fontWeight: FontWeight.w700))),
+            _savingMaintenanceAmount
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : _TextLink(
+                    label: maintenance.tenant.maintenanceAmount > 0 ? 'Edit Amount' : 'Set Amount',
+                    onTap: _editMaintenanceAmount,
+                  ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (maintenance.tenant.maintenanceAmount <= 0)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text('No monthly maintenance charge set for this tenant.', style: TextStyle(fontSize: 13, color: AppColors.muted)),
+          )
+        else ...[
+          Text('₹${maintenance.tenant.maintenanceAmount}/month', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          if (maintenance.due.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('Nothing pending — fully paid up.', style: TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w600)),
+            )
+          else
+            for (final due in maintenance.due)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: DarkCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(due.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 2),
+                            Text('₹${due.amount}', style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        height: 34,
+                        width: 128,
+                        child: _collectingMaintenance == due
+                            ? const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: CircularProgressIndicator(strokeWidth: 2))
+                            : ElevatedButton(
+                                onPressed: () => _collectMaintenance(due),
+                                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14)),
+                                child: const Text('Mark Collected', style: TextStyle(fontSize: 12.5)),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          if (maintenance.payments.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            for (final payment in maintenance.payments)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: DarkCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(payment.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 2),
+                            Text('₹${payment.amount} · ${_formatDate(payment.paidAt)}', style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+                          ],
+                        ),
+                      ),
+                      PillBadge(label: payment.methodLabel, color: payment.method == 'online' ? AppColors.brand : AppColors.success),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ],
       ],
     );
   }
