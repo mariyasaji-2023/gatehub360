@@ -4,6 +4,7 @@ const Tenant = require('../models/Tenant');
 const RentPayment = require('../models/RentPayment');
 const Property = require('../models/Property');
 const Announcement = require('../models/Announcement');
+const PropertyComplaint = require('../models/PropertyComplaint');
 const User = require('../models/User');
 const { dueMonths } = require('../utils/rentDues');
 const { notifyOwner } = require('../utils/pushNotify');
@@ -139,6 +140,69 @@ router.post('/:tenantId/pay', requireAuth, async (req, res) => {
       return res.status(409).json({ message: 'That month is already marked paid' });
     }
     throw err;
+  }
+});
+
+// --- Complaints (tenant side) ---
+//
+// Same PropertyComplaint records the owner manages via
+// routes/properties.js's /:id/complaints endpoints - these just add the
+// tenant's own entry points, scoped to tenant records they've linked.
+
+// Every complaint this tenant has raised, across all properties they've
+// linked to their account - lets them track status without needing to
+// know/select which property it was against.
+router.get('/complaints', requireAuth, async (req, res) => {
+  const tenants = await findMyTenantRecords(req);
+  const tenantIds = tenants.map((t) => t._id);
+  const complaints = await PropertyComplaint.find({ tenant: { $in: tenantIds } })
+    .populate('property', 'title')
+    .sort({ createdAt: -1 });
+  res.json({ complaints });
+});
+
+router.post('/:tenantId/complaints', requireAuth, async (req, res) => {
+  const tenant = await Tenant.findOne({ _id: req.params.tenantId, linkedUser: req.user._id, status: 'active' });
+  if (!tenant) {
+    return res.status(404).json({ message: 'Tenant record not found for your account' });
+  }
+
+  const { description, location, category, urgent } = req.body;
+  if (!description || !category) {
+    return res.status(400).json({ message: 'Description and issue type are required' });
+  }
+  if (!PropertyComplaint.CATEGORIES.includes(category)) {
+    return res.status(400).json({ message: 'Invalid issue type' });
+  }
+  if (location !== undefined && location !== null && !PropertyComplaint.LOCATIONS.includes(location)) {
+    return res.status(400).json({ message: 'Invalid issue location' });
+  }
+
+  const complaint = await PropertyComplaint.create({
+    property: tenant.property,
+    owner: tenant.owner,
+    tenant: tenant._id,
+    description,
+    location: location || undefined,
+    category,
+    urgent: Boolean(urgent),
+  });
+  const populated = await complaint.populate('property', 'title');
+  res.status(201).json({ complaint: populated });
+
+  // Same pattern as the rent-paid notification above - sent after
+  // responding so a slow/failed push never delays the tenant's submission.
+  try {
+    const owner = await User.findById(tenant.owner);
+    if (owner) {
+      await notifyOwner(owner, {
+        title: 'New complaint',
+        body: `${tenant.name} raised a complaint: ${description}`,
+        data: { type: 'property_complaint', propertyId: String(tenant.property) },
+      });
+    }
+  } catch (notifyErr) {
+    console.error('Failed to send complaint push notification:', notifyErr.message);
   }
 });
 

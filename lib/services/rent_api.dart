@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/property_announcement.dart';
+import '../models/property_complaint.dart';
 import '../models/rent_payment.dart';
 import 'api_config.dart';
 import 'auth_service.dart';
@@ -52,6 +53,32 @@ class RentApi {
       'paymentId': paymentId,
     });
     _decode(response);
+  }
+
+  // --- Complaints (tenant side) ---
+
+  /// Every complaint this tenant has raised, across every property they've
+  /// linked to their account.
+  static Future<List<PropertyComplaint>> fetchMyComplaints() async {
+    final response = await _get('/my-rent/complaints');
+    final complaints = _decode(response)['complaints'] as List;
+    return complaints.map((j) => PropertyComplaint.fromJson(j as Map<String, dynamic>)).toList();
+  }
+
+  static Future<PropertyComplaint> raiseComplaint(
+    String tenantId, {
+    required String description,
+    required ComplaintCategory category,
+    ComplaintLocation? location,
+    bool urgent = false,
+  }) async {
+    final response = await _post('/my-rent/$tenantId/complaints', {
+      'description': description,
+      'category': category.wireValue,
+      if (location != null) 'location': location.wireValue,
+      'urgent': urgent,
+    });
+    return PropertyComplaint.fromJson(_decode(response)['complaint'] as Map<String, dynamic>);
   }
 
   static Map<String, dynamic> _decode(http.Response response) {

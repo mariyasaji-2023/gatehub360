@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const CATEGORIES = ['plumbing', 'electrical', 'cleaning', 'structural', 'appliance', 'pest_control', 'other'];
-const STATUSES = ['received', 'in_progress', 'resolved'];
+const STATUSES = ['received', 'in_progress', 'resolved', 'closed'];
 const LOCATIONS = ['room', 'bathroom', 'kitchen', 'common_area', 'exterior', 'other'];
 
 // A maintenance ticket raised against a property - separate from the

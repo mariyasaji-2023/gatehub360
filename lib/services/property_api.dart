@@ -10,6 +10,7 @@ import '../models/property_listing.dart';
 import '../models/property_unit.dart';
 import '../models/rent_payment.dart';
 import '../models/tenant.dart';
+import '../models/visitor.dart';
 import 'api_config.dart';
 import 'auth_service.dart';
 
@@ -326,6 +327,37 @@ class PropertyApi {
   static Future<PropertyComplaint> updateComplaintStatus(String propertyId, String complaintId, ComplaintStatus status) async {
     final response = await _patch('/properties/$propertyId/complaints/$complaintId', {'status': status.wireValue});
     return PropertyComplaint.fromJson(_decode(response)['complaint'] as Map<String, dynamic>);
+  }
+
+  // --- Visitor management ---
+
+  /// Every visitor ever logged for this property, most recent first -
+  /// doubles as "history"; one with no exitTime yet is still inside.
+  static Future<List<Visitor>> fetchVisitors(String propertyId) async {
+    final response = await _get('/properties/$propertyId/visitors');
+    final visitors = _decode(response)['visitors'] as List;
+    return visitors.map((j) => Visitor.fromJson(j as Map<String, dynamic>)).toList();
+  }
+
+  static Future<Visitor> logVisitorEntry(
+    String propertyId, {
+    required String name,
+    String? phone,
+    String? purpose,
+    String? meetingName,
+  }) async {
+    final response = await _post('/properties/$propertyId/visitors', {
+      'name': name,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
+      if (purpose != null && purpose.isNotEmpty) 'purpose': purpose,
+      if (meetingName != null && meetingName.isNotEmpty) 'meetingName': meetingName,
+    });
+    return Visitor.fromJson(_decode(response)['visitor'] as Map<String, dynamic>);
+  }
+
+  static Future<Visitor> markVisitorExit(String propertyId, String visitorId) async {
+    final response = await _patch('/properties/$propertyId/visitors/$visitorId/exit', {});
+    return Visitor.fromJson(_decode(response)['visitor'] as Map<String, dynamic>);
   }
 
   // --- Announcements (owner side) ---

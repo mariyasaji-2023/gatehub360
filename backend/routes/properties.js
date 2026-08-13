@@ -9,6 +9,7 @@ const Unit = require('../models/Unit');
 const Announcement = require('../models/Announcement');
 const PropertyJoinRequest = require('../models/PropertyJoinRequest');
 const PropertyComplaint = require('../models/PropertyComplaint');
+const Visitor = require('../models/Visitor');
 const { notifyOwner } = require('../utils/pushNotify');
 const { dueMonths, isCurrentMonth } = require('../utils/rentDues');
 
@@ -806,6 +807,57 @@ router.patch('/:id/complaints/:complaintId', requireAuth, async (req, res) => {
   complaint.status = status;
   await complaint.save();
   res.json({ complaint });
+});
+
+// --- Visitor management ---
+//
+// Simple entry/exit log kept per property. "History" is just this same list
+// - a visitor with no exitTime yet reads as "currently inside".
+
+router.get('/:id/visitors', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const visitors = await Visitor.find({ property: property._id }).sort({ entryTime: -1 });
+  res.json({ visitors });
+});
+
+router.post('/:id/visitors', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const { name, phone, purpose, meetingName } = req.body;
+  if (!name) {
+    return res.status(400).json({ message: 'Visitor name is required' });
+  }
+  const visitor = await Visitor.create({
+    property: property._id,
+    owner: req.user._id,
+    name,
+    phone: phone || undefined,
+    purpose: purpose || undefined,
+    meetingName: meetingName || undefined,
+    entryTime: new Date(),
+  });
+  res.status(201).json({ visitor });
+});
+
+router.patch('/:id/visitors/:visitorId/exit', requireAuth, async (req, res) => {
+  const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!property) {
+    return res.status(404).json({ message: 'Property not found' });
+  }
+  const visitor = await Visitor.findOne({ _id: req.params.visitorId, property: property._id });
+  if (!visitor) {
+    return res.status(404).json({ message: 'Visitor not found' });
+  }
+  if (!visitor.exitTime) {
+    visitor.exitTime = new Date();
+    await visitor.save();
+  }
+  res.json({ visitor });
 });
 
 // --- Rent collection (owner side) ---

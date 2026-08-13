@@ -6,6 +6,8 @@ import '../widgets/dark_card.dart';
 import '../widgets/pill_badge.dart';
 import '../widgets/razorpay_payment_sheet.dart';
 import 'my_announcements_screen.dart';
+import 'my_complaints_screen.dart';
+import 'raise_complaint_screen.dart';
 
 /// Tenant-facing rent screen — shows every property this signed-in user has
 /// linked to their account by entering an owner-shared join code, what's
@@ -141,6 +143,13 @@ class _MyRentScreenState extends State<MyRentScreen> {
             tooltip: 'Announcements',
           ),
           IconButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MyComplaintsScreen()),
+            ),
+            icon: const Icon(Icons.report_problem_outlined),
+            tooltip: 'My Complaints',
+          ),
+          IconButton(
             onPressed: _joining ? null : _showJoinDialog,
             icon: _joining
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -213,6 +222,24 @@ class _MyRentScreenState extends State<MyRentScreen> {
                 Text(rental.propertyLocation, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
                 const SizedBox(height: 8),
                 Text('₹${rental.monthlyRent}/month', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final raised = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => RaiseComplaintScreen(tenantId: rental.tenantId, propertyTitle: rental.propertyTitle),
+                        ),
+                      );
+                      if (raised == true) {
+                        // Nothing to refresh on this screen; complaints live on MyComplaintsScreen.
+                      }
+                    },
+                    icon: const Icon(Icons.report_problem_outlined, size: 17),
+                    label: const Text('Report an Issue'),
+                  ),
+                ),
               ],
             ),
           ),

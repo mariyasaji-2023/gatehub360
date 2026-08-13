@@ -86,6 +86,7 @@ class _PropertyComplaintsScreenState extends State<PropertyComplaintsScreen> {
         ComplaintStatus.received => AppColors.danger,
         ComplaintStatus.inProgress => AppColors.amber,
         ComplaintStatus.resolved => AppColors.success,
+        ComplaintStatus.closed => AppColors.muted,
       };
 
   String _formatDate(DateTime date) {
@@ -169,7 +170,7 @@ class _PropertyComplaintsScreenState extends State<PropertyComplaintsScreen> {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(_formatDate(c.createdAt), style: const TextStyle(fontSize: 11, color: AppColors.muted)),
-                                  if (c.status != ComplaintStatus.resolved) ...[
+                                  if (c.status != ComplaintStatus.closed) ...[
                                     const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1)),
                                     _updatingId == c.id
                                         ? const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 6), child: CircularProgressIndicator(strokeWidth: 2)))
@@ -183,12 +184,21 @@ class _PropertyComplaintsScreenState extends State<PropertyComplaintsScreen> {
                                                   ),
                                                 ),
                                               if (c.status == ComplaintStatus.received) const SizedBox(width: 10),
-                                              Expanded(
-                                                child: ElevatedButton(
-                                                  onPressed: () => _changeStatus(c, ComplaintStatus.resolved),
-                                                  child: const Text('Mark Resolved'),
+                                              if (c.status != ComplaintStatus.resolved)
+                                                Expanded(
+                                                  child: ElevatedButton(
+                                                    onPressed: () => _changeStatus(c, ComplaintStatus.resolved),
+                                                    child: const Text('Mark Resolved'),
+                                                  ),
                                                 ),
-                                              ),
+                                              if (c.status == ComplaintStatus.resolved)
+                                                Expanded(
+                                                  child: ElevatedButton(
+                                                    onPressed: () => _changeStatus(c, ComplaintStatus.closed),
+                                                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.muted),
+                                                    child: const Text('Close Complaint'),
+                                                  ),
+                                                ),
                                             ],
                                           ),
                                   ],

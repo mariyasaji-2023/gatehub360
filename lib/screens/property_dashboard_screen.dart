@@ -18,6 +18,7 @@ import 'collect_payment_screen.dart';
 import 'property_announcements_screen.dart';
 import 'property_complaints_screen.dart';
 import 'property_units_screen.dart';
+import 'property_visitors_screen.dart';
 import 'tenants_screen.dart';
 
 List<StatOverviewItem> _overviewItems(RentSummary? rent, VacancySummary? vacancy, int? openComplaints, VoidCallback onOpenComplaints) {
@@ -226,6 +227,11 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
         QuickAction(icon: Icons.campaign_outlined, label: 'Send Announcement', onTap: _openAnnouncements),
         QuickAction(icon: Icons.map_outlined, label: 'Property Address', onTap: _openAddress),
         QuickAction(icon: Icons.check_circle_outline, label: 'Amenities', onTap: _showAmenities),
+        QuickAction(
+          icon: Icons.badge_outlined,
+          label: 'Visitors',
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PropertyVisitorsScreen(propertyId: widget.listing.id))),
+        ),
         const QuickAction(icon: Icons.trending_down_outlined, label: 'Add Expense'),
         const QuickAction(icon: Icons.request_quote_outlined, label: 'Add Dues'),
       ];
