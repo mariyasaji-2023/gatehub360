@@ -12,6 +12,9 @@ class MyPropertyListing {
   final String mode;
   final String title;
   final String location;
+  // Fuller, more precise address than [location] - optional, used for the
+  // "Property Address" Quick Action's map link when present.
+  final String address;
   final String price;
   final String bhk;
   final String sqft;
@@ -32,6 +35,7 @@ class MyPropertyListing {
     required this.mode,
     required this.title,
     required this.location,
+    this.address = '',
     required this.price,
     required this.bhk,
     required this.sqft,
@@ -52,6 +56,7 @@ class MyPropertyListing {
         mode: json['mode'] as String,
         title: json['title'] as String,
         location: json['location'] as String,
+        address: json['address'] as String? ?? '',
         price: json['price'] as String,
         bhk: json['bhk'] as String,
         sqft: json['sqft'] as String,

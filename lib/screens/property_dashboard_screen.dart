@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/property_listing.dart';
 import '../models/property_unit.dart';
 import '../models/rent_payment.dart';
@@ -175,6 +176,19 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
     }
   }
 
+  // Opens the property's address in Google Maps - just a text search, since
+  // the app only stores a free-text address, not coordinates. Prefers the
+  // detailed `address` field when the owner filled it in; falls back to the
+  // coarser `location` (area/city) for properties that don't have one yet.
+  Future<void> _openAddress() async {
+    final query = widget.listing.address.isNotEmpty ? widget.listing.address : widget.listing.location;
+    final uri = Uri.https('www.google.com', '/maps/search/', {'api': '1', 'query': query});
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open Google Maps')));
+    }
+  }
+
   // Placeholder quick actions — wire the rest up to real flows as each one
   // is built. More actions to come.
   List<QuickAction> get _quickActions => [
@@ -183,6 +197,7 @@ class _PropertyDashboardScreenState extends State<PropertyDashboardScreen> {
         QuickAction(icon: Icons.report_problem_outlined, label: 'Add Complaint', onTap: _openAddComplaint),
         QuickAction(icon: Icons.request_page_outlined, label: 'Collect Payment', onTap: _openCollectPayment),
         QuickAction(icon: Icons.campaign_outlined, label: 'Send Announcement', onTap: _openAnnouncements),
+        QuickAction(icon: Icons.map_outlined, label: 'Property Address', onTap: _openAddress),
         const QuickAction(icon: Icons.trending_down_outlined, label: 'Add Expense'),
         const QuickAction(icon: Icons.request_quote_outlined, label: 'Add Dues'),
       ];

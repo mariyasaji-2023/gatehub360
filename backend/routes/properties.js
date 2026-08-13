@@ -117,7 +117,7 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(403).json({ message: 'Only property owners can add properties' });
   }
 
-  const { type, mode, title, location, price, bhk, sqft, about, contact, active, images, videoUrl, amenities } = req.body;
+  const { type, mode, title, location, address, price, bhk, sqft, about, contact, active, images, videoUrl, amenities } = req.body;
   if (!Property.TYPES.includes(type)) {
     return res.status(400).json({ message: 'Invalid property type' });
   }
@@ -149,6 +149,7 @@ router.post('/', requireAuth, async (req, res) => {
     mode,
     title,
     location,
+    address: typeof address === 'string' ? address : '',
     price,
     bhk,
     sqft,
@@ -168,7 +169,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     return res.status(404).json({ message: 'Property not found' });
   }
 
-  const { type, mode, title, location, price, bhk, sqft, about, contact, active, images, videoUrl, amenities } = req.body;
+  const { type, mode, title, location, address, price, bhk, sqft, about, contact, active, images, videoUrl, amenities } = req.body;
   if (type !== undefined) {
     if (!Property.TYPES.includes(type)) return res.status(400).json({ message: 'Invalid property type' });
     property.type = type;
@@ -183,6 +184,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
   }
   if (title !== undefined) property.title = title;
   if (location !== undefined) property.location = location;
+  if (address !== undefined) property.address = typeof address === 'string' ? address : '';
   if (price !== undefined) property.price = price;
   if (sqft !== undefined) property.sqft = sqft;
   if (about !== undefined) property.about = about;

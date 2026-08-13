@@ -10,8 +10,9 @@ class QuickAction {
 }
 
 /// "Quick Actions" style section — a title row with a "View All" link, above
-/// a horizontally scrollable strip of circular icon shortcuts. Tapping an
-/// action with no `onTap` wired yet just says so, instead of doing nothing.
+/// a fixed 4-column grid of circular icon shortcuts (wraps to as many rows
+/// as needed, no horizontal scrolling). Tapping an action with no `onTap`
+/// wired yet just says so, instead of doing nothing.
 class QuickActionsSection extends StatelessWidget {
   final String title;
   final List<QuickAction> actions;
@@ -45,49 +46,49 @@ class QuickActionsSection extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(
-          height: 112,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemCount: actions.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 18),
-            itemBuilder: (context, index) {
-              final action = actions[index];
-              return SizedBox(
-                width: 78,
-                child: Column(
-                  children: [
-                    Material(
-                      color: AppColors.brand.withValues(alpha: 0.12),
-                      shape: const CircleBorder(),
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: action.onTap ??
-                            () => ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('${action.label} — coming soon')),
-                                ),
-                        child: Container(
-                          width: 68,
-                          height: 68,
-                          alignment: Alignment.center,
-                          child: Icon(action.icon, color: AppColors.brand, size: 28),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      action.label,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.15),
-                    ),
-                  ],
-                ),
-              );
-            },
+        GridView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 4,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 8,
+            childAspectRatio: 0.72,
           ),
+          itemCount: actions.length,
+          itemBuilder: (context, index) {
+            final action = actions[index];
+            return Column(
+              children: [
+                Material(
+                  color: AppColors.brand.withValues(alpha: 0.12),
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: action.onTap ??
+                        () => ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('${action.label} — coming soon')),
+                            ),
+                    child: Container(
+                      width: 68,
+                      height: 68,
+                      alignment: Alignment.center,
+                      child: Icon(action.icon, color: AppColors.brand, size: 28),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  action.label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.15),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );

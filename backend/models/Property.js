@@ -28,6 +28,11 @@ const propertySchema = new mongoose.Schema(
     mode: { type: String, required: true, enum: MODES },
     title: { type: String, required: true, trim: true },
     location: { type: String, required: true, trim: true },
+    // A fuller, more precise address than `location` (which is just an
+    // area/city) - optional so existing properties don't need backfilling.
+    // Used for the "Property Address" Quick Action's map link when present,
+    // falling back to `location` otherwise.
+    address: { type: String, default: '', trim: true },
     price: { type: String, required: true, trim: true },
     bhk: { type: String, required: true, enum: BHKS },
     sqft: { type: String, required: true, trim: true },

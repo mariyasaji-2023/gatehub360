@@ -108,6 +108,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
           mode: result.mode,
           title: result.title,
           location: result.location,
+          address: result.address,
           price: result.price,
           bhk: result.bhk,
           sqft: result.sqft,
@@ -125,6 +126,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
           mode: result.mode,
           title: result.title,
           location: result.location,
+          address: result.address,
           price: result.price,
           bhk: result.bhk,
           sqft: result.sqft,
@@ -355,6 +357,7 @@ class _PropertyFormResult {
   final String mode;
   final String title;
   final String location;
+  final String address;
   final String price;
   final String bhk;
   final String sqft;
@@ -370,6 +373,7 @@ class _PropertyFormResult {
     required this.mode,
     required this.title,
     required this.location,
+    required this.address,
     required this.price,
     required this.bhk,
     required this.sqft,
@@ -397,6 +401,7 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
   late String _bhk = widget.existing?.bhk ?? _propertyBhks.first;
   late final _titleController = TextEditingController(text: widget.existing?.title ?? '');
   late final _locationController = TextEditingController(text: widget.existing?.location ?? '');
+  late final _addressController = TextEditingController(text: widget.existing?.address ?? '');
   late final _priceController = TextEditingController(text: widget.existing?.price ?? '');
   late final _sqftController = TextEditingController(text: widget.existing?.sqft ?? '');
   late final _aboutController = TextEditingController(text: widget.existing?.about ?? '');
@@ -419,6 +424,7 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
   void dispose() {
     _titleController.dispose();
     _locationController.dispose();
+    _addressController.dispose();
     _priceController.dispose();
     _sqftController.dispose();
     _aboutController.dispose();
@@ -493,6 +499,7 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
       mode: _mode,
       title: _titleController.text.trim(),
       location: _locationController.text.trim(),
+      address: _addressController.text.trim(),
       price: _priceController.text.trim(),
       bhk: _bhk,
       sqft: _sqftController.text.trim(),
@@ -597,6 +604,12 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
                   controller: _locationController,
                   decoration: const InputDecoration(labelText: 'Location (area, city)'),
                   validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _addressController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(labelText: 'Full Address (optional — used for maps)'),
                 ),
                 const SizedBox(height: 14),
                 Row(
