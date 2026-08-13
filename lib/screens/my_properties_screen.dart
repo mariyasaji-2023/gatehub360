@@ -1,12 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/property_listing.dart';
 import '../services/auth_service.dart';
+import '../services/cloudinary_api.dart';
 import '../services/property_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
+import '../widgets/property_video_player.dart';
 import 'property_dashboard_screen.dart';
 
 const _propertyTypes = ['Apartment', 'Villa', 'Plot', 'Commercial'];
@@ -70,6 +73,11 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
     );
     if (result == null) return;
 
+    // The form sheet above already closed, so without this the screen would
+    // just sit there looking unchanged while the (possibly multi-MB, with
+    // photos) save request is in flight - easy to mistake for "my edit
+    // didn't save" when it's really just still uploading.
+    _showSavingOverlay();
     try {
       if (existing == null) {
         await PropertyApi.create(
@@ -84,6 +92,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
           contact: result.contact,
           active: result.active,
           images: result.images,
+          videoUrl: result.videoUrl,
         );
       } else {
         await PropertyApi.update(
@@ -99,13 +108,40 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
           contact: result.contact,
           active: result.active,
           images: result.images,
+          videoUrl: result.videoUrl,
+          updateVideoUrl: true,
         );
       }
       await _load();
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
     }
+  }
+
+  void _showSavingOverlay() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(
+          child: DarkCard(
+            padding: EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5)),
+                SizedBox(width: 16),
+                Text('Saving…', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _confirmDelete(MyPropertyListing listing) async {
@@ -301,6 +337,7 @@ class _PropertyFormResult {
   final String contact;
   final bool active;
   final List<String> images;
+  final String? videoUrl;
 
   const _PropertyFormResult({
     required this.type,
@@ -314,6 +351,7 @@ class _PropertyFormResult {
     required this.contact,
     required this.active,
     required this.images,
+    required this.videoUrl,
   });
 }
 
@@ -339,6 +377,8 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
   late bool _active = widget.existing?.active ?? true;
   late List<String> _images = List<String>.from(widget.existing?.images ?? const []);
   bool _pickingImages = false;
+  late String? _videoUrl = widget.existing?.videoUrl;
+  bool _uploadingVideo = false;
 
   @override
   void dispose() {
@@ -350,6 +390,25 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
     _contactController.dispose();
     super.dispose();
   }
+
+  Future<void> _pickVideo() async {
+    final picked = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    if (picked == null) return;
+
+    setState(() => _uploadingVideo = true);
+    try {
+      final url = await CloudinaryApi.uploadVideo(File(picked.path));
+      if (!mounted) return;
+      setState(() => _videoUrl = url);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not upload video: $e')));
+    } finally {
+      if (mounted) setState(() => _uploadingVideo = false);
+    }
+  }
+
+  void _removeVideo() => setState(() => _videoUrl = null);
 
   Future<void> _addPhotos() async {
     final remaining = _maxPropertyImages - _images.length;
@@ -397,6 +456,7 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
       contact: _contactController.text.trim(),
       active: _active,
       images: _images,
+      videoUrl: _videoUrl,
     ));
   }
 
@@ -457,6 +517,15 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
                   maxImages: _maxPropertyImages,
                   onAdd: _addPhotos,
                   onRemove: _removePhoto,
+                ),
+                const SizedBox(height: 14),
+                Text('Video (optional)', style: AppFonts.heading(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                _VideoPicker(
+                  videoUrl: _videoUrl,
+                  uploading: _uploadingVideo,
+                  onAdd: _pickVideo,
+                  onRemove: _removeVideo,
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
@@ -526,6 +595,77 @@ class _PropertyFormSheetState extends State<_PropertyFormSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Add/preview/remove the property's single walkthrough video, used inside
+/// the Add/Edit Property form. Upload itself (picking -> Cloudinary) is
+/// driven by the parent; this just reflects whatever state it's given.
+class _VideoPicker extends StatelessWidget {
+  final String? videoUrl;
+  final bool uploading;
+  final VoidCallback onAdd;
+  final VoidCallback onRemove;
+
+  const _VideoPicker({
+    required this.videoUrl,
+    required this.uploading,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (uploading) {
+      return Container(
+        height: 56,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+          color: AppColors.surfaceAlt,
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: 12),
+            Text('Uploading video…', style: TextStyle(fontSize: 13, color: AppColors.muted)),
+          ],
+        ),
+      );
+    }
+
+    final url = videoUrl;
+    if (url == null) {
+      return OutlinedButton.icon(
+        onPressed: onAdd,
+        icon: const Icon(Icons.videocam_outlined, size: 18),
+        label: const Text('Add a walkthrough video'),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        PropertyVideoPlayer(videoUrl: url),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            TextButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Replace'),
+            ),
+            TextButton.icon(
+              onPressed: onRemove,
+              icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
+              label: const Text('Remove', style: TextStyle(color: AppColors.danger)),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

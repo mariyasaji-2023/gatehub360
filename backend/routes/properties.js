@@ -31,6 +31,18 @@ function validateImages(images) {
   return { valid: true, images };
 }
 
+// The video itself is uploaded straight from the app to Cloudinary (see
+// lib/services/cloudinary_api.dart) - the backend only ever sees and stores
+// the resulting hosted URL, so this is just a sanity check, not a real
+// upload path.
+function validateVideoUrl(videoUrl) {
+  if (videoUrl === undefined || videoUrl === null || videoUrl === '') return { valid: true, videoUrl: null };
+  if (typeof videoUrl !== 'string' || videoUrl.length > 500 || !/^https:\/\//.test(videoUrl)) {
+    return { valid: false, message: 'Invalid video URL' };
+  }
+  return { valid: true, videoUrl };
+}
+
 // Shared by POST /:id/tenants and the join-request approval route below -
 // both end up creating the same kind of Tenant record. joinCode collisions
 // are rare (6 chars, 32-char alphabet) but the unique index can still
@@ -96,7 +108,7 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(403).json({ message: 'Only property owners can add properties' });
   }
 
-  const { type, mode, title, location, price, bhk, sqft, about, contact, active, images } = req.body;
+  const { type, mode, title, location, price, bhk, sqft, about, contact, active, images, videoUrl } = req.body;
   if (!Property.TYPES.includes(type)) {
     return res.status(400).json({ message: 'Invalid property type' });
   }
@@ -113,6 +125,10 @@ router.post('/', requireAuth, async (req, res) => {
   if (!imagesCheck.valid) {
     return res.status(400).json({ message: imagesCheck.message });
   }
+  const videoCheck = validateVideoUrl(videoUrl);
+  if (!videoCheck.valid) {
+    return res.status(400).json({ message: videoCheck.message });
+  }
 
   const property = await Property.create({
     owner: req.user._id,
@@ -127,6 +143,7 @@ router.post('/', requireAuth, async (req, res) => {
     contact,
     active: active ?? true,
     images: imagesCheck.images ?? [],
+    videoUrl: videoCheck.videoUrl,
   });
   res.status(201).json({ property });
 });
@@ -137,7 +154,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     return res.status(404).json({ message: 'Property not found' });
   }
 
-  const { type, mode, title, location, price, bhk, sqft, about, contact, active, images } = req.body;
+  const { type, mode, title, location, price, bhk, sqft, about, contact, active, images, videoUrl } = req.body;
   if (type !== undefined) {
     if (!Property.TYPES.includes(type)) return res.status(400).json({ message: 'Invalid property type' });
     property.type = type;
@@ -161,6 +178,11 @@ router.patch('/:id', requireAuth, async (req, res) => {
     const imagesCheck = validateImages(images);
     if (!imagesCheck.valid) return res.status(400).json({ message: imagesCheck.message });
     property.images = imagesCheck.images;
+  }
+  if (videoUrl !== undefined) {
+    const videoCheck = validateVideoUrl(videoUrl);
+    if (!videoCheck.valid) return res.status(400).json({ message: videoCheck.message });
+    property.videoUrl = videoCheck.videoUrl;
   }
 
   await property.save();

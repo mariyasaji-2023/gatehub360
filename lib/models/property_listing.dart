@@ -22,6 +22,8 @@ class MyPropertyListing {
   // Base64-encoded photos the owner added (no data: URI prefix) - decode
   // with base64Decode and render via Image.memory.
   final List<String> images;
+  // Hosted Cloudinary URL of the owner's walkthrough video, if they added one.
+  final String? videoUrl;
 
   const MyPropertyListing({
     required this.id,
@@ -37,6 +39,7 @@ class MyPropertyListing {
     this.active = true,
     this.unreadEnquiries = 0,
     this.images = const [],
+    this.videoUrl,
   });
 
   String get emoji => emojiForPropertyType(type);
@@ -55,6 +58,7 @@ class MyPropertyListing {
         active: json['active'] as bool? ?? true,
         unreadEnquiries: json['unreadEnquiries'] as int? ?? 0,
         images: (json['images'] as List?)?.map((e) => e as String).toList() ?? const [],
+        videoUrl: json['videoUrl'] as String?,
       );
 }
 

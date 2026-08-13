@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import '../models/property_listing.dart';
 import '../models/rent_payment.dart';
@@ -9,6 +7,8 @@ import '../services/rent_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dark_card.dart';
 import '../widgets/pill_badge.dart';
+import '../widgets/property_photo_gallery.dart';
+import '../widgets/property_video_player.dart';
 import '../widgets/razorpay_payment_sheet.dart';
 
 Color _modeColor(String mode) => switch (mode) {
@@ -217,7 +217,11 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
   List<Widget> _buildBrowseView(MyPropertyListing d) {
     return [
       if (d.images.isNotEmpty) ...[
-        _PhotoGallery(images: d.images),
+        PropertyPhotoGallery(images: d.images),
+        const SizedBox(height: 20),
+      ],
+      if (d.videoUrl != null) ...[
+        PropertyVideoPlayer(videoUrl: d.videoUrl!),
         const SizedBox(height: 20),
       ],
       Container(
@@ -313,7 +317,11 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
   List<Widget> _buildRentalView(MyPropertyListing d, MyRental rental) {
     return [
       if (d.images.isNotEmpty) ...[
-        _PhotoGallery(images: d.images),
+        PropertyPhotoGallery(images: d.images),
+        const SizedBox(height: 20),
+      ],
+      if (d.videoUrl != null) ...[
+        PropertyVideoPlayer(videoUrl: d.videoUrl!),
         const SizedBox(height: 20),
       ],
       DarkCard(
@@ -520,28 +528,6 @@ class _EnquiryDialogState extends State<_EnquiryDialog> {
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
         ElevatedButton(onPressed: _submit, child: const Text('Notify Owner')),
       ],
-    );
-  }
-}
-
-/// Horizontal, swipeable strip of the property's photos.
-class _PhotoGallery extends StatelessWidget {
-  final List<String> images;
-  const _PhotoGallery({required this.images});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: SizedBox(
-        height: 200,
-        child: PageView(
-          children: [
-            for (final img in images)
-              Image.memory(base64Decode(img), fit: BoxFit.cover, width: double.infinity),
-          ],
-        ),
-      ),
     );
   }
 }

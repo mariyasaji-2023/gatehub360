@@ -22,6 +22,11 @@ const propertySchema = new mongoose.Schema(
     // on external file storage - fine at this app's scale since MAX_IMAGES
     // and per-image size are capped in the route handlers below.
     images: { type: [String], default: [] },
+    // A walkthrough video, if the owner added one. Unlike images, video is
+    // far too large to store inline in Mongo (16MB document limit) - the
+    // app uploads it straight to Cloudinary and only the resulting hosted
+    // URL is saved here.
+    videoUrl: { type: String, default: null, trim: true },
     // Floor names the owner has added for vacancy management (e.g. "Ground
     // Floor", "1st Floor") - order as added, individual Units reference these
     // by name rather than a separate Floor collection.

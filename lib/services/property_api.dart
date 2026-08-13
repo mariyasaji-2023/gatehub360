@@ -43,6 +43,7 @@ class PropertyApi {
     required String contact,
     bool active = true,
     List<String> images = const [],
+    String? videoUrl,
   }) async {
     final response = await _post('/properties', {
       'type': type,
@@ -56,6 +57,7 @@ class PropertyApi {
       'contact': contact,
       'active': active,
       'images': images,
+      'videoUrl': videoUrl,
     });
     return MyPropertyListing.fromJson(_decode(response)['property'] as Map<String, dynamic>);
   }
@@ -73,6 +75,11 @@ class PropertyApi {
     String? contact,
     bool? active,
     List<String>? images,
+    // videoUrl needs to distinguish "leave it as-is" (omit the argument)
+    // from "the owner removed their video" (pass null explicitly) - a plain
+    // nullable param can't tell those apart, so this flag does.
+    String? videoUrl,
+    bool updateVideoUrl = false,
   }) async {
     final response = await _patch('/properties/$id', {
       if (type != null) 'type': type,
@@ -86,6 +93,7 @@ class PropertyApi {
       if (contact != null) 'contact': contact,
       if (active != null) 'active': active,
       if (images != null) 'images': images,
+      if (updateVideoUrl) 'videoUrl': videoUrl,
     });
     return MyPropertyListing.fromJson(_decode(response)['property'] as Map<String, dynamic>);
   }
