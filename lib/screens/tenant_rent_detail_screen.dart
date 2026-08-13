@@ -216,6 +216,10 @@ class _TenantRentDetailScreenState extends State<TenantRentDetailScreen> {
                 const SizedBox(height: 6),
                 _detailRow(Icons.mail_outline, detail.tenant.email!),
               ],
+              if (detail.tenant.securityDeposit != null) ...[
+                const SizedBox(height: 6),
+                _detailRow(Icons.savings_outlined, 'Advance ₹${detail.tenant.securityDeposit}'),
+              ],
               const SizedBox(height: 6),
               _detailRow(Icons.event_outlined, 'Joined ${_formatDate(detail.tenant.moveInDate)}'),
               if (detail.tenant.moveOutDate != null) ...[
@@ -458,39 +462,73 @@ class _DocumentRow extends StatelessWidget {
             ],
           )
         else if (url == null)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              OutlinedButton.icon(
-                onPressed: onUpload,
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.border),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  visualDensity: VisualDensity.compact,
-                ),
-                icon: const Icon(Icons.upload_file_outlined, size: 15),
-                label: const Text('Upload', style: TextStyle(fontSize: 12.5)),
-              ),
-            ],
-          )
+          // Deliberately not an OutlinedButton - Material's ButtonStyleButton
+          // (OutlinedButton/TextButton/ElevatedButton, .icon() or not) hits a
+          // real Flutter layout bug ("BoxConstraints forces an infinite
+          // width") when placed inside this Row, because its _InputPadding
+          // minimum-tap-target wrapper can't handle the unbounded width a
+          // Row hands non-flex children. A plain InkWell sidesteps it.
+          _PillButton(icon: Icons.upload_file_outlined, label: 'Upload', onTap: onUpload)
         else
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextButton(
-                onPressed: () => onView(url!),
-                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                child: const Text('View', style: TextStyle(fontSize: 12.5)),
-              ),
-              const SizedBox(width: 12),
-              TextButton(
-                onPressed: onUpload,
-                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                child: const Text('Replace', style: TextStyle(fontSize: 12.5)),
-              ),
+              _TextLink(label: 'View', onTap: () => onView(url!)),
+              const SizedBox(width: 16),
+              _TextLink(label: 'Replace', onTap: onUpload),
             ],
           ),
       ],
+    );
+  }
+}
+
+/// Small bordered tap target used in place of OutlinedButton - see the
+/// comment in _DocumentRow.build() for why.
+class _PillButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _PillButton({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 15, color: AppColors.text),
+              const SizedBox(width: 6),
+              Text(label, style: const TextStyle(fontSize: 12.5, color: AppColors.text)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small tap target used in place of TextButton - see the comment in
+/// _DocumentRow.build() for why.
+class _TextLink extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _TextLink({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Text(label, style: const TextStyle(fontSize: 12.5, color: AppColors.brand, fontWeight: FontWeight.w600)),
     );
   }
 }

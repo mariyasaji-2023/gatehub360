@@ -4,9 +4,16 @@ const Tenant = require('../models/Tenant');
 const RentPayment = require('../models/RentPayment');
 const Property = require('../models/Property');
 const Announcement = require('../models/Announcement');
+const User = require('../models/User');
 const { dueMonths } = require('../utils/rentDues');
+const { notifyOwner } = require('../utils/pushNotify');
 
 const router = express.Router();
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
 // A tenant only becomes payable-by-them once they enter the join code the
 // owner shared with them (see POST /join below), which sets `linkedUser` -
@@ -110,6 +117,23 @@ router.post('/:tenantId/pay', requireAuth, async (req, res) => {
       razorpayPaymentId: paymentId,
     });
     res.status(201).json({ payment, propertyTitle: property?.title });
+
+    // Owner sees the payment either way next time they open the app (both
+    // sides read the same RentPayment records) - this push just means they
+    // don't have to go looking for it. Sent after responding to the tenant
+    // so a slow/failed notification never delays or breaks their checkout.
+    try {
+      const owner = await User.findById(tenant.owner);
+      if (owner) {
+        await notifyOwner(owner, {
+          title: 'Rent received',
+          body: `${tenant.name} paid ₹${tenant.monthlyRent} for ${MONTH_NAMES[month - 1]} ${year} (${property?.title ?? 'your property'})`,
+          data: { type: 'rent_paid', propertyId: String(tenant.property), tenantId: String(tenant._id) },
+        });
+      }
+    } catch (notifyErr) {
+      console.error('Failed to send rent payment push notification:', notifyErr.message);
+    }
   } catch (err) {
     if (err.code === 11000) {
       return res.status(409).json({ message: 'That month is already marked paid' });
